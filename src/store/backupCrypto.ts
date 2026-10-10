@@ -19,7 +19,12 @@ export const SALT_BYTES = 16
 export const IV_BYTES = 12
 export const TAG_BYTES = 16
 /** Hard cap on the whole file, enforced on export and (before reading it) on import. */
-export const MAX_BACKUP_BYTES = 600 * 1024 * 1024
+/**
+ * Export holds the rows, the packed container, the ciphertext and the Blob at once, and import holds the
+ * ciphertext, the plaintext and per-file copies, so peak memory is several times the file size. iOS Safari
+ * kills the tab at a few hundred MB, hence 200 MB rather than the 600 MB first specified.
+ */
+export const MAX_BACKUP_BYTES = 200 * 1024 * 1024
 
 const LENGTH_BYTES = 4
 const PREFIX_BYTES = 8 + LENGTH_BYTES
@@ -219,6 +224,7 @@ export async function open(
   const ciphertext = await source.read(bodyStart, source.size)
   const key = await deriveKey(passphrase, salt, header.kdf.iterations, ['decrypt'])
   try {
+    // `ciphertext` goes out of scope on return, so only the plaintext stays alive for the caller.
     const plain = await subtle().decrypt({ name: 'AES-GCM', iv, additionalData: headerBytes, tagLength: TAG_BYTES * 8 }, key, ciphertext)
     return { header, plaintext: new Uint8Array(plain) }
   } catch {

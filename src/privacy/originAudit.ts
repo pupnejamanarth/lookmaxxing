@@ -1,3 +1,5 @@
+import { getNetGuardStats, type NetGuardTarget } from './netGuard'
+
 /**
  * Origin audit for the Settings "Privacy check" panel: which origins did this page actually load
  * anything from? In production the answer must be exactly one – our own.
@@ -16,6 +18,14 @@ export interface OriginAudit {
   origins: OriginCount[]
   /** Origins other than our own, sorted. Empty is the only acceptable answer in production. */
   external: string[]
+}
+
+/** What the audit can and cannot see. Worker traffic never shows up in the page's timing buffer. */
+export interface OriginAuditReport extends OriginAudit {
+  /** True when the timing buffer overflowed or was cleared: the list may be incomplete. */
+  truncated: boolean
+  /** CSP violations the page reported (origin only). Not every engine lists blocked loads in the timing buffer. */
+  cspBlocked: { origin: string; count: number }[]
 }
 
 export const UNPARSEABLE_ORIGIN = '(unparseable)'
@@ -76,6 +86,8 @@ export function summarizeResourceOrigins(entries: readonly { name: string }[], s
 export interface PerformanceLike {
   getEntriesByType(type: string): readonly { name: string }[]
   setResourceTimingBufferSize?(maxSize: number): void
+  clearResourceTimings?(): void
+  addEventListener?(type: string, listener: () => void): void
 }
 
 export interface OriginAuditEnv {
@@ -83,6 +95,47 @@ export interface OriginAuditEnv {
   performance?: PerformanceLike
   /** Defaults to globalThis.location. */
   location?: { href: string; origin?: string }
+  /** Where the net guard is installed (for its CSP tally). Defaults to globalThis. */
+  netGuardTarget?: NetGuardTarget
+}
+
+interface WatchState {
+  truncated: boolean
+  captured: Set<string>
+}
+
+const watches = new WeakMap<object, WatchState>()
+
+/**
+ * Notice when the Resource Timing buffer overflows or is cleared. Origins already seen are kept so
+ * a foreign load cannot disappear from the audit; `truncated` tells the UI the list may be partial.
+ * Idempotent per performance object. Call once at startup.
+ */
+export function watchResourceTiming(env: OriginAuditEnv = {}): void {
+  const perf = env.performance ?? globalThis.performance
+  if (!perf || watches.has(perf)) return
+  const state: WatchState = { truncated: false, captured: new Set() }
+  watches.set(perf, state)
+  const snapshot = (): void => {
+    const self = normalizeOrigin(env.location?.origin ?? env.location?.href ?? globalThis.location?.origin ?? '')
+    for (const { origin } of summarizeResourceOrigins(entriesOfType(perf, 'resource'), self).origins) state.captured.add(origin)
+  }
+  try {
+    perf.addEventListener?.('resourcetimingbufferfull', () => {
+      snapshot()
+      state.truncated = true
+    })
+    const nativeClear = perf.clearResourceTimings
+    if (typeof nativeClear === 'function') {
+      perf.clearResourceTimings = function clearResourceTimings(this: unknown) {
+        snapshot()
+        state.truncated = true
+        return nativeClear.call(perf)
+      }
+    }
+  } catch {
+    /* best effort */
+  }
 }
 
 function entriesOfType(perf: PerformanceLike | undefined, type: string): { name: string }[] {
@@ -94,14 +147,29 @@ function entriesOfType(perf: PerformanceLike | undefined, type: string): { name:
 }
 
 /** The audit for the running page: navigation + resource entries, relative to document.location. */
-export function getOriginAudit(env: OriginAuditEnv = {}): OriginAudit {
+export function getOriginAudit(env: OriginAuditEnv = {}): OriginAuditReport {
   const perf = env.performance ?? globalThis.performance
   const loc = env.location ?? globalThis.location
   const navigation = entriesOfType(perf, 'navigation')
   // Some engines expose no navigation entry; the document itself must still count.
   const document = navigation.length === 0 && loc?.href ? [{ name: loc.href }] : []
   const entries = [...document, ...navigation, ...entriesOfType(perf, 'resource')]
-  return summarizeResourceOrigins(entries, loc?.origin ?? loc?.href ?? '')
+  const selfOrigin = loc?.origin ?? loc?.href ?? ''
+  const base = summarizeResourceOrigins(entries, selfOrigin)
+  const watch = perf ? watches.get(perf) : undefined
+  const self = normalizeOrigin(selfOrigin)
+  const origins = [...base.origins]
+  // Origins seen before an eviction stay visible (count 0 = no longer in the buffer).
+  for (const origin of watch?.captured ?? []) {
+    if (origin !== self && !origins.some((o) => o.origin === origin)) origins.push({ origin, count: 0 })
+  }
+  const external = origins.map((o) => o.origin).filter((o) => o !== self).sort()
+  return {
+    origins,
+    external,
+    truncated: watch?.truncated ?? false,
+    cspBlocked: getNetGuardStats(env.netGuardTarget).cspBlocked,
+  }
 }
 
 /**

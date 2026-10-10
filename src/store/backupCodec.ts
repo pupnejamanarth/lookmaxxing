@@ -9,7 +9,10 @@
  *   Blob / File          { __lmxblob: n, type, name?, lastModified? }   (name present = File)
  *   ArrayBuffer, typed   { __lmxbin: n, kind }
  *   Date                 { __lmxdate: ms | null }
- *   NaN, +-Infinity      { __lmxnum: 'NaN' | 'Infinity' | '-Infinity' }
+ *   NaN, +-Infinity, -0  { __lmxnum: 'NaN' | 'Infinity' | '-Infinity' | '-0' }
+ *   Object with a key starting '__lmx' (user data)   { __lmxobj: [[key, value], ...] }
+ *
+ * Known JSON limits: an undefined array element comes back as null.
  *
  * Values IndexedDB can hold but this cannot represent (Map, Set, class instances, bigint, ...) make the
  * export fail loudly instead of being silently dropped. Decoding only ever builds data: JSON.parse and the
@@ -43,7 +46,7 @@ const TYPED_ARRAYS: Readonly<Record<string, TypedArrayConstructor>> = {
   BigUint64Array,
 }
 
-const SPECIAL_NUMBERS: Readonly<Record<string, number>> = { NaN, Infinity, '-Infinity': -Infinity }
+const SPECIAL_NUMBERS: Readonly<Record<string, number>> = { NaN, Infinity, '-Infinity': -Infinity, '-0': -0 }
 
 const invalid = (message: string): BackupError => new BackupError('invalid_content', message)
 const tagOf = (value: unknown): string => Object.prototype.toString.call(value).slice(8, -1)
@@ -109,6 +112,7 @@ class Encoder {
       case 'boolean':
         return value
       case 'number':
+        if (Object.is(value, -0)) return { __lmxnum: '-0' }
         return Number.isFinite(value) ? value : { __lmxnum: String(value) }
       case 'object':
         break
@@ -142,11 +146,16 @@ class Encoder {
     if (!isPlainObject(value)) throw this.unsupported(kind)
 
     const out: Record<string, unknown> = {}
+    const escaped: [string, unknown][] = []
     for (const [key, item] of Object.entries(value)) {
-      if (key === '__proto__' || key.startsWith(RESERVED_PREFIX)) throw this.unsupported('reserved field name')
-      if (item !== undefined) out[key] = this.encode(item, depth + 1)
+      if (key === '__proto__') throw this.unsupported('reserved field name')
+      if (item === undefined) continue
+      const encoded = this.encode(item, depth + 1)
+      out[key] = encoded
+      escaped.push([key, encoded])
     }
-    return out
+    // User keys that collide with the codec's tags are carried as entries so they can never be mistaken for one.
+    return escaped.some(([key]) => key.startsWith(RESERVED_PREFIX)) ? { __lmxobj: escaped } : out
   }
 }
 
@@ -315,6 +324,19 @@ class Decoder {
         if (time === null) return new Date(NaN)
         if (typeof time !== 'number' || !Number.isFinite(time) || Math.abs(time) > MAX_TIME) throw this.fail('contains a malformed date')
         return new Date(time)
+      }
+      case '__lmxobj': {
+        only('__lmxobj')
+        const entries = value.__lmxobj
+        if (!Array.isArray(entries)) throw this.fail('contains a malformed object')
+        const out: Record<string, unknown> = {}
+        for (const entry of entries as unknown[]) {
+          if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || entry[0] === '__proto__') {
+            throw this.fail('contains a malformed object')
+          }
+          out[entry[0]] = this.revive(entry[1], 1)
+        }
+        return out
       }
       case '__lmxnum': {
         only('__lmxnum')

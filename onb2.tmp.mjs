@@ -1,0 +1,13 @@
+import { chromium } from '@playwright/test'
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] })
+const p = await (await b.newContext({ viewport: { width: 390, height: 844 } })).newPage()
+await p.goto('http://localhost:5202/lookmaxxing/#/onboarding'); await p.waitForSelector('h1')
+await p.getByRole('button', { name: /I understand/ }).click()
+await p.getByRole('button', { name: 'Next' }).click()
+await p.getByLabel('Height').fill('181'); await p.getByRole('button', { name: 'Next' }).click()
+await p.getByRole('button', { name: 'Next' }).click()
+await p.getByRole('button', { name: 'Open my current stack' }).click()
+await p.waitForTimeout(500); console.log(p.url())
+await p.goto('http://localhost:5202/lookmaxxing/#/onboarding'); await p.reload(); await p.waitForSelector('h1')
+console.log('resumed at:', await p.locator('h1').innerText())
+await b.close()

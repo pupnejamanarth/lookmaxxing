@@ -4,6 +4,7 @@ import {
   getOriginAudit,
   raiseResourceTimingBuffer,
   summarizeResourceOrigins,
+  watchResourceTiming,
   type PerformanceLike,
 } from '../../src/privacy'
 
@@ -86,7 +87,7 @@ describe('summarizeResourceOrigins', () => {
 
   it('does not count data: and blob: loads – they never leave the device', () => {
     const entries = ['data:image/png;base64,AAAA', 'blob:https://app.example/7a1b3c', 'https://app.example/a'].map(entry)
-    expect(summarizeResourceOrigins(entries, SELF)).toEqual({ origins: [{ origin: SELF, count: 1 }], external: [] })
+    expect(summarizeResourceOrigins(entries, SELF)).toMatchObject({ origins: [{ origin: SELF, count: 1 }], external: [] })
   })
 
   it('reports an unparseable name as external instead of hiding it', () => {
@@ -122,9 +123,10 @@ describe('getOriginAudit', () => {
       navigation: ['https://app.example/lookmaxxing/'],
       resource: ['https://app.example/lookmaxxing/assets/a.js', 'https://app.example/lookmaxxing/assets/a.css'],
     })
-    expect(getOriginAudit({ performance, location })).toEqual({
+    expect(getOriginAudit({ performance, location })).toMatchObject({
       origins: [{ origin: SELF, count: 3 }],
       external: [],
+      truncated: false,
     })
   })
 
@@ -138,7 +140,7 @@ describe('getOriginAudit', () => {
 
   it('falls back to document.location when the engine exposes no navigation entry', () => {
     const performance = fakePerformance({ resource: ['https://app.example/a.js'] })
-    expect(getOriginAudit({ performance, location })).toEqual({ origins: [{ origin: SELF, count: 2 }], external: [] })
+    expect(getOriginAudit({ performance, location })).toMatchObject({ origins: [{ origin: SELF, count: 2 }], external: [] })
   })
 
   it('does not count the document twice when a navigation entry exists', () => {
@@ -157,8 +159,8 @@ describe('getOriginAudit', () => {
         throw new Error('unsupported')
       },
     }
-    expect(getOriginAudit({ performance: throwing, location })).toEqual({ origins: [{ origin: SELF, count: 1 }], external: [] })
-    expect(getOriginAudit({ location })).toEqual({ origins: [{ origin: SELF, count: 1 }], external: [] })
+    expect(getOriginAudit({ performance: throwing, location })).toMatchObject({ origins: [{ origin: SELF, count: 1 }], external: [] })
+    expect(getOriginAudit({ location })).toMatchObject({ origins: [{ origin: SELF, count: 1 }], external: [] })
   })
 
   it('reads the live Node globals without throwing', () => {
@@ -184,5 +186,52 @@ describe('raiseResourceTimingBuffer', () => {
       },
     }
     expect(() => raiseResourceTimingBuffer(10, { performance: throwing })).not.toThrow()
+  })
+})
+
+describe('watchResourceTiming', () => {
+  const location = { href: 'https://app.example/lookmaxxing/', origin: SELF }
+
+  function watchable(initial: string[]) {
+    let names = initial
+    let full: () => void = () => {}
+    const performance = {
+      getEntriesByType: (type: string) => (type === 'resource' ? names.map((name) => ({ name })) : []),
+      clearResourceTimings: () => {
+        names = []
+      },
+      addEventListener: (_t: string, fn: () => void) => {
+        full = fn
+      },
+    }
+    return { performance, fire: () => full(), set: (n: string[]) => (names = n) }
+  }
+
+  it('flags truncation and keeps origins seen before the buffer filled', () => {
+    const w = watchable(['https://app.example/a.js', 'https://late.example/x'])
+    watchResourceTiming({ performance: w.performance, location })
+    expect(getOriginAudit({ performance: w.performance, location }).truncated).toBe(false)
+    w.fire()
+    w.set([])
+    const audit = getOriginAudit({ performance: w.performance, location })
+    expect(audit.truncated).toBe(true)
+    expect(audit.external).toEqual(['https://late.example'])
+  })
+
+  it('treats clearResourceTimings as truncation after snapshotting', () => {
+    const w = watchable(['https://seen.example/x'])
+    watchResourceTiming({ performance: w.performance, location })
+    w.performance.clearResourceTimings()
+    const audit = getOriginAudit({ performance: w.performance, location })
+    expect(audit.truncated).toBe(true)
+    expect(audit.external).toEqual(['https://seen.example'])
+  })
+
+  it('is idempotent', () => {
+    const w = watchable([])
+    watchResourceTiming({ performance: w.performance, location })
+    const wrapped = w.performance.clearResourceTimings
+    watchResourceTiming({ performance: w.performance, location })
+    expect(w.performance.clearResourceTimings).toBe(wrapped)
   })
 })

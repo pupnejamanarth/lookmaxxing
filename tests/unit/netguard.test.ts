@@ -405,10 +405,10 @@ describe('installNetGuard – lifecycle', () => {
 
   it('reports installed: false before install (and for the untouched global)', () => {
     const { win } = makeWindow()
-    expect(getNetGuardStats(win)).toEqual({ installed: false, blockedCount: 0, recent: [] })
+    expect(getNetGuardStats(win)).toEqual({ installed: false, blockedCount: 0, recent: [], cspBlocked: [] })
     expect(getNetGuardStats().installed).toBe(false)
     installNetGuard({ target: win })
-    expect(getNetGuardStats(win)).toEqual({ installed: true, blockedCount: 0, recent: [] })
+    expect(getNetGuardStats(win)).toEqual({ installed: true, blockedCount: 0, recent: [], cspBlocked: [] })
   })
 
   it('does not wrap what the target does not have', () => {
@@ -506,5 +506,59 @@ describe('installNetGuard – recording', () => {
     installNetGuard({ target, now: () => 42 })
     await expect(target.fetch('https://evil.example/a')).rejects.toThrow()
     expect(received).toEqual([{ kind: 'fetch', origin: 'https://evil.example', ts: 42 }])
+  })
+})
+
+describe('installNetGuard – WebRTC, WebTransport, fetchLater, CSP tally', () => {
+  function makeExtra() {
+    const listeners: ((e: unknown) => void)[] = []
+    const later: unknown[][] = []
+    class FakePC {}
+    class FakeWT {}
+    const extra = {
+      RTCPeerConnection: FakePC,
+      webkitRTCPeerConnection: FakePC,
+      WebTransport: FakeWT,
+      fetchLater: (...args: unknown[]) => later.push(args),
+      addEventListener: (_type: string, fn: (e: unknown) => void) => listeners.push(fn),
+    }
+    return { extra, listeners, later }
+  }
+
+  it('refuses RTCPeerConnection, webkitRTCPeerConnection and WebTransport', () => {
+    const { extra } = makeExtra()
+    const made = makeWindow(PROD, extra)
+    const win = made.win as Record<string, unknown> & typeof made.win
+    installNetGuard({ target: win, now: counter() })
+    expect(() => new (win.RTCPeerConnection as new () => unknown)()).toThrow(TypeError)
+    expect(() => new (win.webkitRTCPeerConnection as new () => unknown)()).toThrow(TypeError)
+    expect(() => new (win.WebTransport as new (u: string) => unknown)('/wt')).toThrow(TypeError)
+    expect(getNetGuardStats(win).recent.map((r) => r.kind)).toEqual(['webrtc', 'webrtc', 'webtransport'])
+  })
+
+  it('judges fetchLater like fetch', () => {
+    const { extra, later } = makeExtra()
+    const made = makeWindow(PROD, extra)
+    const win = made.win as Record<string, unknown> & typeof made.win
+    installNetGuard({ target: win })
+    const call = win.fetchLater as (u: string) => unknown
+    expect(() => call('https://evil.example/x?q=1')).toThrow(/Blocked by privacy guard: https:\/\/evil\.example/)
+    call('/lookmaxxing/ok')
+    expect(later).toHaveLength(1)
+    expect(getNetGuardStats(win).recent).toMatchObject([{ kind: 'fetchlater', origin: 'https://evil.example' }])
+  })
+
+  it('tallies CSP violations by origin only', () => {
+    const { extra, listeners } = makeExtra()
+    const { win } = makeWindow(PROD, extra)
+    installNetGuard({ target: win })
+    listeners[0]!({ blockedURI: 'https://evil.example/secret?token=1' })
+    listeners[0]!({ blockedURI: 'https://evil.example/other' })
+    listeners[0]!({ blockedURI: 'inline' })
+    expect(getNetGuardStats(win).cspBlocked).toEqual([
+      { origin: 'https://evil.example', count: 2 },
+      { origin: 'inline', count: 1 },
+    ])
+    expect(getNetGuardStats(win).blockedCount).toBe(0)
   })
 })

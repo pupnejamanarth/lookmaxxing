@@ -15,6 +15,8 @@
  *      at a file that is not in dist.
  *   4. dist must not ship photos/video/audio outside icons/ (mirrors the repo guard).
  *
+ * Precached binaries (.wasm/.task/.tflite) are scanned as latin1 for the same URL patterns.
+ *
  * This is a guard against accidents (a dependency that phones home, a stray CDN link),
  * not a defence against someone deliberately hiding a URL behind string concatenation;
  * the runtime defence for that is the CSP itself (connect-src 'self').
@@ -28,6 +30,7 @@ const DIST = resolve(process.argv[2] ?? join(ROOT, 'dist'))
 const ALLOWLIST_FILE = join(ROOT, 'scripts', 'dist-url-allowlist.json')
 
 const TEXT_EXT = new Set(['.html', '.js', '.mjs', '.cjs', '.css', '.webmanifest', '.json', '.svg', '.txt', '.xml', '.map'])
+const BINARY_EXT = new Set(['.wasm', '.task', '.tflite', '.bin', '.onnx'])
 const MEDIA_EXT = /\.(jpe?g|png|webp|gif|heic|heif|avif|bmp|tiff?|mp4|mov|m4a|wav|mp3)$/i
 
 /** @type {{ file: string, message: string }[]} */
@@ -140,8 +143,9 @@ const PROTOCOL_RELATIVE_RE = [
   /@import\s+["']\/\/[^\s"';]+/gi, // css @import
 ]
 
-function scanFile(path, allow, seen) {
-  const text = readFileSync(path, 'utf8')
+function scanFile(path, allow, seen, binary = false) {
+  // latin1 keeps every byte, so ASCII URLs inside .wasm/.task/.tflite files are still found.
+  const text = readFileSync(path, binary ? 'latin1' : 'utf8')
   const name = rel(path)
   const reported = new Set()
   const report = (key, message) => {
@@ -176,7 +180,7 @@ function scanFile(path, allow, seen) {
     }
   }
 
-  if (extname(path) === '.html' || extname(path) === '.css') {
+  if (!binary && (extname(path) === '.html' || extname(path) === '.css')) {
     for (const re of PROTOCOL_RELATIVE_RE) {
       for (const m of text.matchAll(re)) report(m[0], `protocol-relative external URL "${m[0].slice(0, 80)}"`)
     }
@@ -259,6 +263,9 @@ for (const f of files) {
   if (TEXT_EXT.has(extname(f).toLowerCase())) {
     scanFile(f, allow, seenHosts)
     scanned++
+  } else if (BINARY_EXT.has(extname(f).toLowerCase())) {
+    scanFile(f, allow, seenHosts, true)
+    scanned++
   } else if (MEDIA_EXT.test(f) && !r.startsWith('icons/')) {
     fail(rel(f), 'photo/video/audio file in the build output (only icons/ may ship images)')
   }
@@ -272,7 +279,7 @@ if (problems.length) {
 
 const unused = allow.filter((e) => !e.used).map((e) => e.host ?? e.literal)
 console.log(
-  `dist privacy ok: CSP matches config/csp.ts, ${scanned} text files scanned, ` +
+  `dist privacy ok: CSP matches config/csp.ts, ${scanned} files scanned, ` +
     `${precached ?? 0} precache entries all local, allowed inert hosts seen: ${[...seenHosts].sort().join(', ') || 'none'}`,
 )
 if (unused.length) console.log(`note: allow-list entries not present in this build: ${unused.join(', ')}`)

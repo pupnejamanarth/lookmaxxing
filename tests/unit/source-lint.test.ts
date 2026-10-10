@@ -5,8 +5,13 @@
  * TypeScript is parsed (not grepped) so comments never trigger a rule and type-only mentions of
  * e.g. `WebSocket` are not usage. HTML is checked on comment-stripped text.
  *
- * A deliberate exception takes a marker on the same or the previous line:
- *   // privacy-lint-allow: <reason>      (or  <!-- privacy-lint-allow: <reason> -->)
+ * A deliberate exception takes a marker. A marker alone on its line waives the NEXT line only; a
+ * trailing marker waives its own line only:
+ *   // privacy-lint-allow(network-api): <reason>   (or  <!-- privacy-lint-allow(rule): <reason> -->)
+ * The rule list is optional (default: external-url, network-api, local-url-fetch). Analytics,
+ * geolocation, microphone, external-resource and link-rel hits can never be waived.
+ *
+ * src/catalog/data/** may carry citation `url:` values on a short scholarly host list without markers.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -32,6 +37,8 @@ const W3_NAMESPACES = new Set([
 
 /** These APIs are exactly what src/privacy/netGuard.ts wraps; only that folder may touch them. */
 const NETWORK_API_DIR = 'src/privacy/'
+/** Contexts that do not inherit the page CSP; each use must name where './install' runs. */
+const WORKER_APIS = new Set(['Worker', 'SharedWorker', 'importScripts'])
 const NETWORK_APIS = new Set([
   'XMLHttpRequest',
   'WebSocket',
@@ -40,6 +47,20 @@ const NETWORK_APIS = new Set([
   // WebRTC is not covered by connect-src, so it is a way around the CSP.
   'RTCPeerConnection',
   'webkitRTCPeerConnection',
+])
+
+/** Citation links in the bundled catalog. Only as the value of a `url` property in CATALOG_DATA_DIR. */
+const CATALOG_DATA_DIR = 'src/catalog/data/'
+const SCHOLARLY_HOSTS = new Set([
+  'doi.org',
+  'www.doi.org',
+  'dx.doi.org',
+  'pubmed.ncbi.nlm.nih.gov',
+  'ncbi.nlm.nih.gov',
+  'www.ncbi.nlm.nih.gov',
+  'pmc.ncbi.nlm.nih.gov',
+  'journals.sagepub.com',
+  'researchportal.northumbria.ac.uk',
 ])
 
 /** Microphone capture (voice, v3) may only live here. */
@@ -85,7 +106,8 @@ const RESOURCE_ATTRS: Readonly<Record<string, string>> = {
 }
 
 const URL_RE = /\b(?:https?|wss?|ftp):\/\/[^\s'"`<>\\^|{}()]*/gi
-const MARKER_RE = /(?:\/\/|\/\*|<!--)\s*privacy-lint-allow:(.*)/
+const MARKER_RE = /(?:\/\/|\/\*|<!--)\s*privacy-lint-allow(?:\(([^)]*)\))?:(.*)/
+const DEFAULT_WAIVES: readonly string[] = ['external-url', 'network-api', 'local-url-fetch']
 
 // ───────────────────────────── engine ─────────────────────────────
 
@@ -95,6 +117,8 @@ type Rule =
   | 'geolocation'
   | 'getusermedia-audio'
   | 'network-api'
+  | 'local-url-fetch'
+  | 'link-rel'
   | 'analytics'
   | 'allow-marker'
 
@@ -134,6 +158,15 @@ function isExternalRef(value: string): boolean {
   }
 }
 
+function isScholarlyUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && !url.username && !url.password && SCHOLARLY_HOSTS.has(url.hostname)
+  } catch {
+    return false
+  }
+}
+
 /** URL and vendor-name rules over text that is known not to be a comment. */
 function scanText(raw: string, start: number, emit: Emit): void {
   for (const m of raw.matchAll(URL_RE)) {
@@ -142,6 +175,21 @@ function scanText(raw: string, start: number, emit: Emit): void {
   for (const [name, re] of ANALYTICS) {
     for (const m of raw.matchAll(re)) emit(start + m.index, 'analytics', `${name} ("${m[0]}")`)
   }
+}
+
+/**
+ * Scan both the source slice and the cooked value: escapes ('https:\\/\\/x', '\\x68ttps://x') hide a
+ * URL from the raw text only. Whichever finds more is reported (they usually find the same).
+ */
+function scanLiteral(raw: string, cooked: string, start: number, emit: Emit): void {
+  const collect = (text: string, at: number): [number, Rule, string][] => {
+    const out: [number, Rule, string][] = []
+    scanText(text, at, (pos, rule, detail) => out.push([pos, rule, detail]))
+    return out
+  }
+  const fromRaw = collect(raw, start)
+  const fromCooked = collect(cooked, start)
+  for (const [pos, rule, detail] of fromCooked.length > fromRaw.length ? fromCooked : fromRaw) emit(pos, rule, detail)
 }
 
 function isTypeOnlyUse(id: ts.Identifier): boolean {
@@ -177,20 +225,62 @@ function lintTypeScript(file: string, text: string): Hit[] {
     if (ts.isIdentifier(node)) {
       if (!isTypeOnlyUse(node)) checkName(node.text, node.getStart(sf), 'identifier')
       scanText(node.text, node.getStart(sf), emit)
+      if (!networkAllowed && WORKER_APIS.has(node.text) && !isTypeOnlyUse(node)) {
+        emit(node.getStart(sf), 'network-api', `${node.text} – worker scope needs './install' first; mark where the guard is installed`)
+      }
+      const access = node.parent
+      if (
+        !networkAllowed &&
+        node.text === 'register' &&
+        ts.isPropertyAccessExpression(access) &&
+        access.name === node &&
+        access.expression.getText(sf).endsWith('serviceWorker')
+      ) {
+        emit(node.getStart(sf), 'network-api', 'serviceWorker.register – the worker must import the net guard')
+      }
     } else if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
       const start = node.getStart(sf)
       checkName(node.text.trim(), start, 'string')
-      scanText(text.slice(start, node.end), start, emit)
+      const parent = node.parent
+      const catalogCitation =
+        file.startsWith(CATALOG_DATA_DIR) &&
+        ts.isPropertyAssignment(parent) &&
+        parent.initializer === node &&
+        (ts.isIdentifier(parent.name) || ts.isStringLiteral(parent.name)) &&
+        parent.name.text === 'url' &&
+        isScholarlyUrl(node.text)
+      if (!catalogCitation) scanLiteral(text.slice(start, node.end), node.text, start, emit)
     } else if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
       const start = node.getStart(sf)
       scanText(text.slice(start, node.end), start, emit)
     } else if (ts.isJsxText(node)) {
       scanText(text.slice(node.pos, node.end), node.pos, emit)
+    } else if (ts.isCallExpression(node)) {
+      const callee = node.expression
+      const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : ''
+      const arg = node.arguments[0]
+      if (name === 'fetch' && arg) {
+        const literal = (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) && /^\s*(?:data|blob):/i.test(arg.text)
+        if (literal || arg.getText(sf).includes('createObjectURL')) {
+          emit(arg.getStart(sf), 'local-url-fetch', 'fetch of a data:/blob: URL is blocked by connect-src in the built app – use Blob/atob/createImageBitmap')
+        }
+      }
     } else if (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) {
       const name = node.name
       const isAudio = (ts.isIdentifier(name) || ts.isStringLiteral(name)) && name.text === 'audio'
       const isFalse = ts.isPropertyAssignment(node) && node.initializer.kind === ts.SyntaxKind.FalseKeyword
       if (isAudio && !isFalse) audioProps.push(name.getStart(sf))
+    } else if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      if (node.tagName.getText(sf) === 'a') {
+        const attr = (n: string) => node.attributes.properties.find((p): p is ts.JsxAttribute => ts.isJsxAttribute(p) && p.name.getText(sf) === n)
+        const rel = attr('rel')?.initializer
+        const relText = rel && ts.isStringLiteral(rel) ? rel.text : ''
+        const blank = attr('target')?.initializer?.getText(sf).includes('_blank') === true
+        const sourceLink = /\.url\b/.test(attr('href')?.initializer?.getText(sf) ?? '')
+        if ((blank || sourceLink) && !(/\bnoopener\b/.test(relText) && /\bnoreferrer\b/.test(relText))) {
+          emit(node.getStart(sf), 'link-rel', '<a> to a source/_blank target needs rel="noopener noreferrer"')
+        }
+      }
     } else if (ts.isJsxAttribute(node) && node.initializer && ts.isStringLiteral(node.initializer)) {
       const element = node.parent.parent
       const tag = (ts.isJsxOpeningElement(element) || ts.isJsxSelfClosingElement(element) ? element.tagName.getText(sf) : '').toLowerCase()
@@ -231,22 +321,30 @@ function lintHtml(file: string, text: string): Hit[] {
   return hits
 }
 
-/** Hits on a marked line (or the line after it) are waived – if the marker says why. */
+const UNWAIVABLE: readonly Rule[] = ['analytics', 'geolocation', 'getusermedia-audio', 'external-resource', 'link-rel', 'allow-marker']
+
+/** Standalone marker -> next line; trailing marker -> its own line. Only waivable rules, only if a reason is given. */
 function applyMarkers(file: string, text: string, hits: Hit[]): Hit[] {
-  const waived = new Set<number>()
+  const waived = new Map<number, Set<string>>()
   const bad: Hit[] = []
   text.split('\n').forEach((lineText, i) => {
     const marker = MARKER_RE.exec(lineText)
     if (!marker) return
-    const reason = (marker[1] ?? '').replace(/\*\/|-->/g, '').trim()
+    const reason = (marker[2] ?? '').replace(/\*\/|-->/g, '').trim()
     if (reason.length < 3) {
       bad.push({ file, line: i + 1, rule: 'allow-marker', detail: 'privacy-lint-allow needs a reason' })
       return
     }
-    waived.add(i + 1)
-    waived.add(i + 2)
+    const named = marker[1] === undefined ? [...DEFAULT_WAIVES] : marker[1].split(',').map((r) => r.trim()).filter(Boolean)
+    const rules = named.filter((r) => !(UNWAIVABLE as readonly string[]).includes(r))
+    if (rules.length !== named.length || rules.length === 0) {
+      bad.push({ file, line: i + 1, rule: 'allow-marker', detail: `cannot waive ${named.join(',') || '(no rule)'}` })
+    }
+    const standalone = lineText.slice(0, marker.index).trim() === ''
+    const line = standalone ? i + 2 : i + 1
+    waived.set(line, new Set([...(waived.get(line) ?? []), ...rules]))
   })
-  return [...hits.filter((hit) => !waived.has(hit.line)), ...bad]
+  return [...hits.filter((hit) => !waived.get(hit.line)?.has(hit.rule)), ...bad]
 }
 
 function lintFile(file: string, text: string): Hit[] {
@@ -270,7 +368,7 @@ describe('lint rules: external URLs', () => {
       '1:external-url',
       '1:external-url',
     ])
-    expect(lint('src/a.ts', 'new Worker("wss://x.example/ws")', "const b = 'ftp://x.example/f'")).toEqual(['1:external-url', '2:external-url'])
+    expect(lint('src/a.ts', 'fetch("wss://x.example/ws")', "const b = 'ftp://x.example/f'")).toEqual(['1:external-url', '2:external-url'])
   })
 
   it('reports the line of a URL inside a multi-line template', () => {
@@ -516,6 +614,70 @@ describe('lint rules: JSX resources', () => {
 
   it('allows relative and data: sources', () => {
     expect(lint('src/a.tsx', 'const a = <img src="/lookmaxxing/icons/a.png" alt="" /> ', 'const b = <img src="data:image/png;base64,AA" alt="" />')).toEqual([])
+  })
+})
+
+describe('lint rules: marker semantics', () => {
+  it('a trailing marker waives its own line only', () => {
+    expect(lint('src/a.ts', 'const a = 1 // privacy-lint-allow: harmless', "fetch('https://evil.example/collect')")).toEqual(['2:external-url'])
+  })
+
+  it('a standalone marker waives the next line only', () => {
+    expect(lint('src/a.ts', '// privacy-lint-allow(external-url): doc link', "const a = 'https://doi.org/x'", "const b = 'https://evil.example'")).toEqual([
+      '3:external-url',
+    ])
+  })
+
+  it('never waives analytics, geolocation or microphone capture', () => {
+    expect(lint('src/a.ts', "import * as Sentry from '@sentry/browser' // privacy-lint-allow: needed")).toContain('1:analytics')
+    expect(lint('src/a.ts', '// privacy-lint-allow: needed', 'navigator.geolocation.getCurrentPosition(cb)')).toContain('2:geolocation')
+    expect(lint('src/a.ts', '// privacy-lint-allow: needed', 'navigator.mediaDevices.getUserMedia({ audio: true })')).toContain('2:getusermedia-audio')
+    expect(lint('src/a.ts', "import * as Sentry from '@sentry/browser' // privacy-lint-allow(analytics): needed")).toContain('1:allow-marker')
+  })
+
+  it('rule-scoped markers only waive the named rule', () => {
+    expect(lint('src/a.ts', "new WebSocket('https://x.example') // privacy-lint-allow(network-api): hmr")).toEqual(['1:external-url'])
+  })
+})
+
+describe('lint rules: escapes, workers, local fetch, link rel, catalog citations', () => {
+  it.each(["'https:\\/\\/evil.example/x'", "'https://evil.example/x'", "'\\x68ttps://evil.example/x'", '`https:\\/\\/evil.example/x`'])(
+    'sees through string escapes: %s',
+    (literal) => {
+      expect(lint('src/a.ts', `const u = ${literal}`)).toEqual(['1:external-url'])
+    },
+  )
+
+  it('flags Worker, SharedWorker, importScripts and serviceWorker.register outside src/privacy/', () => {
+    expect(lint('src/a.ts', "new Worker(new URL('./w.ts', import.meta.url))")).toEqual(['1:network-api'])
+    expect(lint('src/a.ts', "new SharedWorker('/s.js')")).toEqual(['1:network-api'])
+    expect(lint('src/a.ts', "importScripts('/x.js')")).toEqual(['1:network-api'])
+    expect(lint('src/a.ts', "navigator.serviceWorker.register('/sw.js')")).toEqual(['1:network-api'])
+    expect(lint('src/a.ts', "// privacy-lint-allow(network-api): worker entry imports privacy/install", "new Worker('/w.js')")).toEqual([])
+    expect(lint('src/a.ts', 'let w: Worker | null = null')).toEqual([])
+    expect(lint('src/privacy/install.ts', "new Worker('/w.js')")).toEqual([])
+  })
+
+  it('flags fetch of data:/blob: URLs and object URLs', () => {
+    expect(lint('src/a.ts', "fetch('data:image/png;base64,AA')")).toEqual(['1:local-url-fetch'])
+    expect(lint('src/a.ts', 'fetch(URL.createObjectURL(blob))')).toEqual(['1:local-url-fetch'])
+    expect(lint('src/a.ts', "fetch('/lookmaxxing/models/a.task')")).toEqual([])
+  })
+
+  it('requires rel="noopener noreferrer" on source and _blank links', () => {
+    expect(lint('src/a.tsx', 'const a = <a href={source.url}>x</a>')).toEqual(['1:link-rel'])
+    expect(lint('src/a.tsx', 'const a = <a href="/x" target="_blank">x</a>')).toEqual(['1:link-rel'])
+    expect(lint('src/a.tsx', 'const a = <a href={source.url} target="_blank" rel="noopener noreferrer">x</a>')).toEqual([])
+    expect(lint('src/a.tsx', 'const a = <a href="/x">x</a>')).toEqual([])
+  })
+
+  it('exempts only scholarly url: values in src/catalog/data/', () => {
+    const doi = "const s = { url: 'https://doi.org/10.1/x' }"
+    expect(lint('src/catalog/data/a.ts', doi)).toEqual([])
+    expect(lint('src/a.ts', doi)).toEqual(['1:external-url'])
+    expect(lint('src/catalog/data/a.ts', "const s = { url: 'https://evil.example/x' }")).toEqual(['1:external-url'])
+    expect(lint('src/catalog/data/a.ts', "const s = { href: 'https://doi.org/10.1/x' }")).toEqual(['1:external-url'])
+    expect(lint('src/catalog/data/a.ts', "const s = { url: 'https://doi.org@evil.example/x' }")).toEqual(['1:external-url'])
   })
 })
 

@@ -143,6 +143,13 @@ function encodeRgbPng({ width, height, px, bpp }) {
 // --- render + verify ------------------------------------------------------------------------
 const launchOptions = { args: ['--no-sandbox'] }
 if (existsSync(CHROMIUM)) launchOptions.executablePath = CHROMIUM
+else if (process.env.CHROMIUM_PATH) {
+  console.error(`CHROMIUM_PATH points to ${CHROMIUM}, which does not exist.`)
+  process.exit(1)
+} else if (!existsSync(chromium.executablePath())) {
+  console.error('No Chromium found. Run "npx playwright install chromium" or set CHROMIUM_PATH to a Chromium binary.')
+  process.exit(1)
+}
 
 mkdirSync(OUT_DIR, { recursive: true })
 const browser = await chromium.launch(launchOptions)

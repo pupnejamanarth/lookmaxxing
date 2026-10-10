@@ -239,13 +239,10 @@ describe('profile', () => {
     ['scanWeekday 7', { scanWeekday: 7 }],
     ['scanWeekday fractional', { scanWeekday: 1.5 }],
     ['installedToHomeScreen as string', { installedToHomeScreen: 'yes' }],
-    ['storagePersisted as number', { storagePersisted: 1 }],
     ['checklist value not boolean', { privacyChecklist: { a: 'yes' } }],
     ['checklist is an array', { equipmentChecklist: [true] }],
     ['checklist is null', { privacyChecklist: null }],
     ['checklist key empty', { privacyChecklist: { '': true } }],
-    ['onboardedAt negative', { onboardedAt: -1 }],
-    ['onboardedAt fractional', { onboardedAt: 1.5 }],
   ])('rejects %s', async (_label, patch) => {
     const { store, database } = setup()
     const before = await store.getProfile()
@@ -265,11 +262,32 @@ describe('profile', () => {
     ['scanWeekday', 0],
     ['scanWeekday', 6],
     ['installedToHomeScreen', false],
-    ['storagePersisted', true],
   ])('accepts boundary value %s = %s', async (key, value) => {
     const { store } = setup()
     const next = await store.updateProfile({ [key]: value })
     expect(next).toHaveProperty(key, value)
+  })
+
+  it.each([
+    ['onboardedAt', 5],
+    ['onboardedAt', null],
+    ['storagePersisted', true],
+    ['storagePersisted', null],
+  ])('forbids setting %s = %s directly', async (key, value) => {
+    const { store, database } = setup()
+    const before = await store.getProfile()
+    expect(await codeOf(store.updateProfile({ [key]: value } as never))).toBe('forbidden')
+    expect(await store.getProfile()).toEqual(before)
+    expect(await database.audit.count()).toBe(0)
+  })
+
+  it('refuses to clear the height once onboarded', async () => {
+    const { store } = setup()
+    await store.updateProfile({ heightCm: 180 })
+    await store.completeOnboarding()
+    expect(await codeOf(store.updateProfile({ heightCm: null }))).toBe('invalid')
+    expect((await store.getProfile()).heightCm).toBe(180)
+    expect((await store.updateProfile({ heightCm: 181 })).heightCm).toBe(181)
   })
 
   it.each(['id', 'createdAt', 'updatedAt', 'sexProfile', 'name', 'email', 'dateOfBirth', 'location'])(
@@ -508,12 +526,21 @@ describe('whitelist: add, validate, update', () => {
       expect((await store.getActiveWhitelist())).toEqual([])
     })
 
-    it('leaves the patch-test record alone when the category changes', async () => {
+    it('leaves the patch-test record alone when the category change keeps the same rule', async () => {
       const { store } = setup()
       const item = await store.addWhitelistItem({ name: 'Trial', category: 'cleanser', alreadyUsing: false })
       const moved = await store.updateWhitelistItem(item.id, { category: 'moisturizer' })
       expect(moved.patchTest).toEqual(item.patchTest)
       expect(moved.active).toBe(false)
+    })
+
+    it('refuses a category change that crosses the patch-test rule, in both directions', async () => {
+      const { store } = setup()
+      const a = await store.addWhitelistItem({ name: 'X', category: 'other', alreadyUsing: false })
+      expect(await codeOf(store.updateWhitelistItem(a.id, { category: 'cleanser' }))).toBe('forbidden')
+      const b = await store.addWhitelistItem({ name: 'Y', category: 'cleanser', alreadyUsing: false })
+      expect(await codeOf(store.updateWhitelistItem(b.id, { category: 'toothpaste' }))).toBe('forbidden')
+      expect((await store.listWhitelist()).map((i) => i.category)).toEqual(['other', 'cleanser'])
     })
   })
 
@@ -754,10 +781,37 @@ describe('patch-test lifecycle', () => {
 
     it('survives renaming, recategorising and deactivating', async () => {
       const { store, item } = await failedTrial()
-      await store.updateWhitelistItem(item.id, { name: 'Renamed', category: 'moisturizer' })
+      expect(await codeOf(store.updateWhitelistItem(item.id, { name: 'Renamed' }))).toBe('forbidden')
+      expect(await codeOf(store.updateWhitelistItem(item.id, { category: 'moisturizer' }))).toBe('forbidden')
+      await store.updateWhitelistItem(item.id, { notes: 'still editable' })
       await store.setWhitelistActive(item.id, false)
       expect(await codeOf(store.setWhitelistActive(item.id, true))).toBe('forbidden')
       expect((await store.listWhitelist())[0]?.patchTest.status).toBe('failed')
+    })
+
+    it('keeps excluding the product after remove + re-add, rename + re-add and recategorise + re-add', async () => {
+      const { store, database } = setup()
+      const mk = async (name: string, category: ProductCategory = 'cleanser') =>
+        store.addWhitelistItem({ name, category })
+      const a = await mk('Bad One')
+      await store.logPatchTest(a.id, 'reaction')
+      await store.removeWhitelistItem(a.id)
+      expect(await codeOf(mk('  bad ONE '))).toBe('forbidden')
+      expect(await store.getActiveWhitelist()).toEqual([])
+      // a different item cannot be renamed into the excluded product either
+      const other = await mk('Other')
+      expect(await codeOf(store.updateWhitelistItem(other.id, { name: 'Bad One' }))).toBe('forbidden')
+      // the same name in another category is a different product
+      expect((await mk('Bad One', 'moisturizer')).active).toBe(true)
+      const before = await database.audit.count()
+      expect(await codeOf(mk('Bad One'))).toBe('forbidden')
+      expect(await database.audit.count()).toBe(before)
+      // a failed item that is renamed or recategorised is refused, so no one can launder it
+      const b = await mk('Bad Two', 'shampoo')
+      await store.logPatchTest(b.id, 'reaction')
+      expect(await codeOf(store.updateWhitelistItem(b.id, { name: 'Fresh' }))).toBe('forbidden')
+      expect(await codeOf(store.updateWhitelistItem(b.id, { category: 'conditioner' }))).toBe('forbidden')
+      expect(await codeOf(mk('Bad Two', 'shampoo'))).toBe('forbidden')
     })
 
     it('can be reported for a product already in use, which then leaves the active list', async () => {

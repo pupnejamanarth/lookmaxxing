@@ -11,7 +11,7 @@ import {
   type BackupSummary,
 } from '../../src/store/backup'
 import { encodeSnapshot, packContainer, planRestore, unpackContainer } from '../../src/store/backupCodec'
-import { MAX_BACKUP_BYTES, seal } from '../../src/store/backupCrypto'
+import { MAX_BACKUP_BYTES, open, seal } from '../../src/store/backupCrypto'
 import { LookmaxxingDB } from '../../src/store/db'
 import { createStore } from '../../src/store/store'
 
@@ -487,10 +487,47 @@ describe('backup file (fast KDF)', () => {
       expect((error as BackupError).message).not.toContain('topsecret-marker')
 
       await source.kv.clear()
-      for (const value of [new Set([1]), 12n, { __lmxblob: 1 }, { nested: [{ __lmxsomething: true }] }]) {
+      for (const value of [new Set([1]), 12n]) {
         await source.kv.put({ key: 'v', value })
         expect(await codeOf(exportBackup(PASS, source)), String(value)).toBe('invalid_content')
       }
+    })
+  })
+
+  describe('review fixes', () => {
+    it('round-trips user keys that look like codec tags, and -0', async () => {
+      const source = newDb()
+      const value = { __lmxblob: 1, nested: [{ __lmxsomething: true }], zero: -0 }
+      await source.kv.put({ key: 'k', value })
+      const target = newDb()
+      await restoreBackup((await exportBackup(PASS, source)).blob, PASS, target)
+      const got = (await target.kv.get('k'))!.value as typeof value
+      expect(got.__lmxblob).toBe(1)
+      expect(got.nested).toEqual([{ __lmxsomething: true }])
+      expect(Object.is(got.zero, -0)).toBe(true)
+    })
+
+    it('refuses a backup from a newer schema and malformed known rows', async () => {
+      const target = newDb()
+      const newer = await craft(container(manifestOf({}, { schemaVersion: 99 })))
+      expect(await codeOf(inspectBackup(newer, PASS, target))).toBe('invalid_content')
+      const bad = await craft(container(manifestOf({ whitelist: { rows: [{ id: 'x', active: true }] } })))
+      expect(await codeOf(inspectBackup(bad, PASS, target))).toBe('invalid_content')
+    })
+
+    it('forces active=false on a failed patch-test item', async () => {
+      const row = {
+        id: 'w', name: 'n', category: 'cleanser', notes: '', active: true, addedAt: 1, updatedAt: 1,
+        patchTest: { status: 'failed', startedAt: 1, entries: [] },
+      }
+      const target = newDb()
+      await restoreBackup(await craft(container(manifestOf({ whitelist: { rows: [row] } }))), PASS, target)
+      expect((await target.whitelist.get('w'))!.active).toBe(false)
+    })
+
+    it('reports bad_magic for an oversize file without the magic', async () => {
+      const junk = new Blob([new Uint8Array(64)])
+      expect(await codeOf(inspectBackup(junk, PASS, newDb(), { maxBytes: 16 }))).toBe('bad_magic')
     })
   })
 
@@ -793,8 +830,15 @@ describe('backup file (fast KDF)', () => {
       const source = newExtraDb()
       await seed(source)
       await source.extra.put({ id: 'x', image: new Blob([PATTERN], { type: 'image/png' }), note: 'from the future' })
-      const { blob, summary } = await exportBackup(PASS, source)
-      expect(summary.tables.extra).toBe(1)
+      const exported = await exportBackup(PASS, source)
+      expect(exported.summary.tables.extra).toBe(1)
+      // Re-label as schema 1 so only the unknown table (not a newer schema) is under test.
+      const { plaintext } = await open(exported.blob, PASS)
+      const { manifest, parts } = unpackContainer(plaintext)
+      manifest.schemaVersion = 1
+      const blob = await craft(
+        await packContainer(manifest, parts.map((bytes) => ({ size: bytes.length, read: async () => bytes })), MAX_BACKUP_BYTES),
+      )
 
       const target = newDb()
       const inspected = await inspectBackup(blob, PASS, target)
@@ -895,7 +939,10 @@ describe('backup file (fast KDF)', () => {
   })
 
   describe('crafted (but correctly encrypted) files', () => {
-    const profileRow = { id: 'me', sexProfile: 'male', heightCm: 178 }
+    const profileRow = {
+      id: 'me', sexProfile: 'male', heightCm: 178, units: 'metric', dailyMinutes: 30, trainingDaysPerWeek: 3, scanWeekday: 0,
+      privacyChecklist: {}, equipmentChecklist: {}, onboardedAt: null, createdAt: 1, updatedAt: 1,
+    }
 
     it('restores a hand-built container, which proves the helpers above match the format', async () => {
       const bytes = Uint8Array.from([1, 2, 3, 4, 5])

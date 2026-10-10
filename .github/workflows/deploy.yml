@@ -50,6 +50,12 @@ jobs:
       - name: Check the built site for third-party URLs and the privacy meta tags
         run: node scripts/check-dist-privacy.mjs
 
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests (do not publish a broken PWA)
+        run: npm run test:e2e
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

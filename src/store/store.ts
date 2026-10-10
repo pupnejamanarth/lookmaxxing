@@ -206,6 +206,9 @@ function validateProfilePatch(patch: unknown): Partial<Profile> {
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue
     if (!Object.hasOwn(profileValidators, key)) throw invalid(`Unknown setting "${key}"`)
+    if (key === 'onboardedAt' || key === 'storagePersisted') {
+      throw new StoreError('forbidden', `"${key}" is set by the app itself and cannot be edited`)
+    }
     out[key] = profileValidators[key as keyof ProfilePatch](value)
   }
   return out as Partial<Profile>
@@ -247,6 +250,8 @@ function cleanId(value: unknown): string {
 
 /** Duplicate detection key: case-, width- and whitespace-insensitive. */
 const dupKey = (name: string) => name.normalize('NFKC').replace(/\s+/g, ' ').toLowerCase()
+
+const exclusionKey = (name: string, category: ProductCategory) => `excluded:${category}:${dupKey(name)}`
 
 const clip = (text: string) => (text.length > AUDIT_DETAIL_MAX ? `${text.slice(0, AUDIT_DETAIL_MAX - 1)}…` : text)
 
@@ -313,7 +318,7 @@ export function createStore(database: LookmaxxingDB, deps: StoreDeps = {}): Stor
     change: (item: WhitelistItem, ts: number) => ItemChange | null | Promise<ItemChange | null>,
   ): Promise<WhitelistItem> {
     const itemId = cleanId(id)
-    return database.transaction('rw', database.whitelist, database.audit, async () => {
+    return database.transaction('rw', database.whitelist, database.audit, database.kv, async () => {
       const item = await database.whitelist.get(itemId)
       if (!item) throw new StoreError('not_found', 'Product not found')
       const ts = now()
@@ -323,6 +328,13 @@ export function createStore(database: LookmaxxingDB, deps: StoreDeps = {}): Stor
       await database.audit.add({ ts, event: result.event, detail: clip(result.detail) })
       return result.next
     })
+  }
+
+  /** Tombstones outlive the row: deleting, renaming or re-adding a reacted-to product must not undo the exclusion. */
+  async function assertNotExcluded(name: string, category: ProductCategory): Promise<void> {
+    if (await database.kv.get(exclusionKey(name, category))) {
+      throw forbidden(`A reaction was logged for "${name}" (${category}). It stays excluded.`)
+    }
   }
 
   async function assertNoDuplicate(name: string, category: ProductCategory, exceptId: string | null): Promise<void> {
@@ -351,6 +363,7 @@ export function createStore(database: LookmaxxingDB, deps: StoreDeps = {}): Stor
       const validated = validateProfilePatch(patch)
       return database.transaction('rw', database.profile, database.audit, async () => {
         const profile = await loadProfile()
+        if (profile.onboardedAt !== null && validated.heightCm === null) throw invalid('Height cannot be cleared after setup')
         const changed = (Object.keys(validated) as (keyof Profile)[]).filter((key) => !sameValue(profile[key], validated[key]))
         if (changed.length === 0) return profile
         const ts = now()
@@ -396,7 +409,8 @@ export function createStore(database: LookmaxxingDB, deps: StoreDeps = {}): Stor
       // Only a NEW product that goes on skin, scalp or hair is a trial; everything else is usable at once.
       const trial = !alreadyUsing && NEEDS_PATCH_TEST[category]
 
-      return database.transaction('rw', database.whitelist, database.audit, async () => {
+      return database.transaction('rw', database.whitelist, database.audit, database.kv, async () => {
+        await assertNotExcluded(name, category)
         await assertNoDuplicate(name, category, null)
         const ts = now()
         const item: WhitelistItem = {
@@ -423,13 +437,18 @@ export function createStore(database: LookmaxxingDB, deps: StoreDeps = {}): Stor
       const category = patch.category === undefined ? undefined : cleanCategory(patch.category)
       const notes = patch.notes === undefined ? undefined : cleanNotes(patch.notes)
 
-      // Category changes never alter the patch-test status: the record of what was tested stays as it was.
       return changeItem(id, async (item, ts) => {
         const changed: string[] = []
         if (name !== undefined && name !== item.name) changed.push('name')
         if (category !== undefined && category !== item.category) changed.push('category')
         if (notes !== undefined && notes !== item.notes) changed.push('notes')
         if (changed.length === 0) return null
+        if (item.patchTest.status === 'failed' && (changed.includes('name') || changed.includes('category'))) {
+          throw forbidden('A reaction was logged for this product. Its name and category cannot be changed.')
+        }
+        if (category !== undefined && NEEDS_PATCH_TEST[category] !== NEEDS_PATCH_TEST[item.category]) {
+          throw forbidden('Remove it and add it again so the patch-test rule is re-evaluated.')
+        }
         const next: WhitelistItem = {
           ...item,
           name: name ?? item.name,
@@ -437,6 +456,7 @@ export function createStore(database: LookmaxxingDB, deps: StoreDeps = {}): Stor
           notes: notes ?? item.notes,
           updatedAt: ts,
         }
+        if (changed.includes('name') || changed.includes('category')) await assertNotExcluded(next.name, next.category)
         await assertNoDuplicate(next.name, next.category, item.id)
         return { next, event: 'whitelist_updated', detail: `Updated ${describeItem(next)}: changed ${changed.join(', ')}` }
       })
@@ -463,6 +483,7 @@ export function createStore(database: LookmaxxingDB, deps: StoreDeps = {}): Stor
 
     async removeWhitelistItem(id) {
       const itemId = cleanId(id)
+      // The exclusion tombstone lives in kv and is deliberately left alone here.
       await database.transaction('rw', database.whitelist, database.audit, async () => {
         const item = await database.whitelist.get(itemId)
         if (!item) throw new StoreError('not_found', 'Product not found')
@@ -490,7 +511,7 @@ export function createStore(database: LookmaxxingDB, deps: StoreDeps = {}): Stor
     async logPatchTest(id, result, note) {
       if (!PATCH_TEST_RESULTS.includes(result)) throw invalid('Unknown patch test result')
       const cleanedNote = cleanNotes(note)
-      return changeItem(id, (item, ts) => {
+      return changeItem(id, async (item, ts) => {
         const { status } = item.patchTest
         if (status === 'failed') throw forbidden('A reaction was already logged for this product.')
         // A reaction can always be reported (even for a product already in use); other results need a running test.
@@ -498,6 +519,7 @@ export function createStore(database: LookmaxxingDB, deps: StoreDeps = {}): Stor
         const entry: PatchTestEntry = { ts, result, note: cleanedNote }
         const entries = [...item.patchTest.entries, entry]
         if (result === 'reaction') {
+          await database.kv.put({ key: exclusionKey(item.name, item.category), value: ts })
           return {
             next: { ...item, active: false, updatedAt: ts, patchTest: { ...item.patchTest, status: 'failed', entries } },
             event: 'patch_test_logged',

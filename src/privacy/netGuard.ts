@@ -7,14 +7,27 @@
  * (origin only – never the path, query or credentials) and announced as a `lmx:net-blocked`
  * CustomEvent on the target.
  *
+ * Also refused outright: WebRTC (RTCPeerConnection – STUN/TURN is a DNS and data channel that CSP
+ * does not cover) and WebTransport; fetchLater is judged like fetch.
+ *
  * Install it before any other code runs: a reference captured earlier (`const f = fetch`)
  * is not wrapped.
+ *
+ * Scope: this only guards the global it is installed on. Workers get their CSP from their own
+ * response headers (GitHub Pages sends none), so every worker entry must import './install' first.
+ * Blob-inlined workers (`?worker&inline`) inherit the page CSP. The Workbox-generated service worker
+ * is an accepted gap unless it is built with injectManifest and imports './install'.
+ *
+ * "Guard-allowed" is not "CSP-allowed": the production CSP (`connect-src 'self'`) also blocks
+ * fetch/XHR of data: and blob: URLs, which this guard lets through because they never leave the
+ * device. Do not fetch(dataUrl) or fetch(URL.createObjectURL(b)) in app code (source-lint flags it);
+ * use Blob/atob/createImageBitmap(blob) instead.
  */
 
 export const NET_BLOCKED_EVENT = 'lmx:net-blocked'
 export const MAX_RECENT_BLOCKS = 50
 
-export type NetBlockKind = 'fetch' | 'xhr' | 'websocket' | 'eventsource' | 'beacon'
+export type NetBlockKind = 'fetch' | 'xhr' | 'websocket' | 'eventsource' | 'beacon' | 'webrtc' | 'webtransport' | 'fetchlater'
 
 /** Also the `detail` of the `lmx:net-blocked` event. */
 export interface NetBlockRecord {
@@ -30,6 +43,8 @@ export interface NetGuardStats {
   blockedCount: number
   /** Newest last, at most MAX_RECENT_BLOCKS. A copy – mutating it does not affect the guard. */
   recent: NetBlockRecord[]
+  /** CSP `securitypolicyviolation` events seen (origin of blockedURI only), sorted by origin. */
+  cspBlocked: { origin: string; count: number }[]
 }
 
 /**
@@ -43,6 +58,11 @@ export interface NetGuardTarget {
   XMLHttpRequest?: unknown
   WebSocket?: unknown
   EventSource?: unknown
+  RTCPeerConnection?: unknown
+  webkitRTCPeerConnection?: unknown
+  WebTransport?: unknown
+  fetchLater?: unknown
+  addEventListener?: unknown
   navigator?: unknown
   dispatchEvent?: unknown
   CustomEvent?: unknown
@@ -65,6 +85,7 @@ interface Verdict {
 interface GuardState {
   blockedCount: number
   recent: NetBlockRecord[]
+  csp: Map<string, number>
 }
 
 type AnyFn = (...args: unknown[]) => unknown
@@ -171,7 +192,7 @@ export function installNetGuard(opts: NetGuardOptions = {}): void {
   const target: NetGuardTarget = opts.target ?? globalThis
   if (readState(target)) return
 
-  const state: GuardState = { blockedCount: 0, recent: [] }
+  const state: GuardState = { blockedCount: 0, recent: [], csp: new Map() }
   Object.defineProperty(target, STATE_KEY, { value: state, configurable: true })
 
   const now = opts.now ?? Date.now
@@ -254,6 +275,49 @@ export function installNetGuard(opts: NetGuardOptions = {}): void {
   guardConstructor('WebSocket', 'websocket', allowSocket)
   guardConstructor('EventSource', 'eventsource', true)
 
+  // The app never needs these; refuse construction whatever the arguments.
+  const blockConstructor = (key: string, kind: NetBlockKind): void => {
+    const Native: unknown = Reflect.get(target, key)
+    if (!isFn(Native)) return
+    replaceMember(
+      target,
+      key,
+      new Proxy(Native, {
+        construct() {
+          throw refuse(kind, key)
+        },
+      }),
+    )
+  }
+  blockConstructor('RTCPeerConnection', 'webrtc')
+  blockConstructor('webkitRTCPeerConnection', 'webrtc')
+  blockConstructor('WebTransport', 'webtransport')
+
+  const nativeFetchLater: unknown = Reflect.get(target, 'fetchLater')
+  if (isFn(nativeFetchLater)) {
+    replaceMember(target, 'fetchLater', function guardedFetchLater(...args: unknown[]): unknown {
+      const verdict = verdictFor(requestUrl(args[0]))
+      if (!verdict.allowed) throw refuse('fetchlater', verdict.origin)
+      return nativeFetchLater.apply(target, args)
+    })
+  }
+
+  const addListener: unknown = Reflect.get(target, 'addEventListener')
+  if (isFn(addListener)) {
+    addListener.call(target, 'securitypolicyviolation', (event: unknown) => {
+      const blocked = stringMember(event, 'blockedURI')
+      let label = blocked
+      try {
+        const url = new URL(blocked)
+        label = url.origin !== 'null' ? url.origin : url.protocol
+      } catch {
+        // keywords such as "inline" / "eval" / "" are kept as they are, never a path
+      }
+      label = label.slice(0, 64) || 'unknown'
+      state.csp.set(label, (state.csp.get(label) ?? 0) + 1)
+    })
+  }
+
   const nav = target.navigator
   if (typeof nav === 'object' && nav !== null) {
     const nativeBeacon: unknown = Reflect.get(nav, 'sendBeacon')
@@ -274,10 +338,11 @@ export function installNetGuard(opts: NetGuardOptions = {}): void {
 /** Read the guard's counters. `target` defaults to globalThis. */
 export function getNetGuardStats(target: NetGuardTarget = globalThis): NetGuardStats {
   const state = readState(target)
-  if (!state) return { installed: false, blockedCount: 0, recent: [] }
+  if (!state) return { installed: false, blockedCount: 0, recent: [], cspBlocked: [] }
   return {
     installed: true,
     blockedCount: state.blockedCount,
     recent: state.recent.map((entry) => ({ ...entry })),
+    cspBlocked: [...state.csp].map(([origin, count]) => ({ origin, count })).sort((a, b) => (a.origin < b.origin ? -1 : 1)),
   }
 }

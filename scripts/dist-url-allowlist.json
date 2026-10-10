@@ -3,6 +3,7 @@
   "allow": [
     {
       "host": "www.w3.org",
+      "paths": ["/1999/xlink", "/2000/svg", "/1998/Math/MathML", "/XML/1998/namespace", "/1999/xhtml"],
       "reason": "XML, SVG, MathML and xlink namespace identifiers that react-dom compares against when creating elements; identifiers, not links"
     },
     {
@@ -22,6 +23,7 @@
     },
     {
       "host": "json-schema.org",
+      "paths": ["/draft"],
       "reason": "zod's JSON Schema export writes these as the value of the $schema field of a generated schema object; an identifier string"
     },
     {

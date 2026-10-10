@@ -9,8 +9,12 @@
  *    failure at any point leaves the previous data exactly as it was.
  *  - The passphrase and the decrypted data are never logged and never appear in an error message.
  *
- * exportBackup does not write an audit row: the UI knows whether the user actually saved the file and
- * records 'backup_exported' (store.appendAudit) at that point.
+ * exportBackup does not write an audit row, by contract: the UI knows whether the user actually saved the file and
+ * must call store.appendAudit('backup_exported', ...) at that point.
+ *
+ * Additions beyond the minimal contract (all optional, compatible): the `database` and `deps` parameters, and
+ * BackupSummary.ignoredTables (names; use .length for the count of unknown tables skipped).
+ * Unsupported value types (Map, Set, bigint, class instances) make export fail with invalid_content.
  */
 import { version as APP_VERSION } from '../../package.json'
 import { type BackupHeader, FORMAT_VERSION, MAX_BACKUP_BYTES, normalizePassphrase, open, seal } from './backupCrypto'
@@ -23,6 +27,7 @@ import {
   unpackContainer,
 } from './backupCodec'
 import { BackupError } from './backupError'
+import { validateRows } from './backupValidate'
 import { db, type LookmaxxingDB } from './db'
 
 export { BackupError } from './backupError'
@@ -132,7 +137,12 @@ async function load(
 ): Promise<{ header: BackupHeader; plan: RestorePlan }> {
   const { header, plaintext } = await open(file, passphrase, sizeLimit(deps))
   const { manifest, parts } = unpackContainer(plaintext)
-  return { header, plan: planRestore(manifest, parts, database) }
+  if (manifest.schemaVersion > database.verno) {
+    throw new BackupError('invalid_content', 'This backup was made by a newer version of the app. Update the app, then try again.')
+  }
+  const plan = planRestore(manifest, parts, database)
+  validateRows(plan.tables)
+  return { header, plan }
 }
 
 /** Decrypts and validates exactly like restoreBackup, but writes nothing. */

@@ -1,0 +1,99 @@
+.wl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.wl-item__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.wl-item__name {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.wl-item__cat {
+  margin: 2px 0 0;
+  color: var(--dim);
+  font-size: 0.875rem;
+}
+
+.wl-item__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-1);
+}
+
+.wl-item__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.wl-item__notes {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9375rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.wl-patch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.wl-patch--failed {
+  border-color: var(--danger);
+}
+
+.wl-patch__title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.wl-patch p,
+.wl-patch ul {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.wl-patch ul {
+  padding-left: 1.25rem;
+}
+
+.wl-patch__log {
+  list-style: none;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--dim);
+}
+
+.wl-patch__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.wl-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.9375rem;
+}

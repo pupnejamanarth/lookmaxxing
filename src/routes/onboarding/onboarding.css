@@ -1,0 +1,144 @@
+.onb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-bottom: var(--space-6);
+}
+
+.onb-lead {
+  color: var(--dim);
+}
+
+.onb-list {
+  margin: 0;
+  padding-left: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.onb-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.onb-nav__row {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.onb-quiet {
+  align-self: center;
+}
+
+.onb-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.onb-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.onb-seg {
+  display: flex;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px;
+  gap: 3px;
+}
+
+.onb-seg__opt {
+  flex: 1 1 0;
+  min-height: var(--tap);
+  min-width: 0;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.onb-seg__opt.is-on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.onb-seg__opt:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.onb-seg__opt.is-on:focus-visible {
+  outline-color: var(--text);
+}
+
+.onb-howto {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.onb-howto li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.onb-howto__art {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--accent);
+}
+
+.onb-summary {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.onb-summary__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.onb-summary__row:last-child {
+  border-bottom: 0;
+}
+
+.onb-summary dt {
+  color: var(--dim);
+}
+
+.onb-summary dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-seg__opt {
+    transition: none;
+  }
+}
