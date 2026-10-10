@@ -74,14 +74,15 @@ export function StepNav({ onBack, onNext, nextLabel = 'Next', busy, children, er
 }
 
 export interface SegmentedProps<T extends string | number> {
-  label: string
+  label?: string
+  labelledBy?: string
   value: T
   options: { value: T; label: string }[]
   onChange: (v: T) => void
 }
 
 /** Radio group drawn as a segmented control. Arrow keys move and select. */
-export function Segmented<T extends string | number>({ label, value, options, onChange }: SegmentedProps<T>) {
+export function Segmented<T extends string | number>({ label, labelledBy, value, options, onChange }: SegmentedProps<T>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const index = options.findIndex((o) => o.value === value)
   const move = (to: number) => {
@@ -90,7 +91,7 @@ export function Segmented<T extends string | number>({ label, value, options, on
     refs.current[i]?.focus()
   }
   return (
-    <div className="onb-seg" role="radiogroup" aria-label={label}>
+    <div className="onb-seg" role="radiogroup" aria-label={label} aria-labelledby={labelledBy}>
       {options.map((o, i) => (
         <button
           key={String(o.value)}

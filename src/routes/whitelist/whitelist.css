@@ -97,3 +97,15 @@
   color: var(--danger);
   font-size: 0.9375rem;
 }
+
+.wl-page {
+  padding-bottom: var(--space-6);
+}
+
+.wl-patch__how summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.9375rem;
+}

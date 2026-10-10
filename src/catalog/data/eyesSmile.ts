@@ -1,7 +1,12 @@
 /**
- * Eyes and smile catalog (category `eyes_smile`, ids E01–E16, weight total EXACTLY 8).
+ * Eyes and smile catalog (category `eyes_smile`, ids E01–E17, weight total EXACTLY 8).
  *
  * Authoring notes (read before editing):
+ *  - Review round 2 (this session also had no working fetch: DNS failure on PubMed; the web search budget was
+ *    exhausted), so NO source could be opened and every source stays verified:false. Findings that asked for
+ *    verified:true or full author lists were not applied for that reason; claims were downgraded instead.
+ *    Sources whose citation could not be resolved (lindsey2010, microesthetics) were deleted, and the claims
+ *    that rested on them were removed.
  *  - Every source here is verified:false. The authoring session had a working web search but no working
  *    page fetch: the fetch tool failed with a DNS error, and the network policy refused direct connections
  *    to PubMed, DOI and publisher hosts (HTTP 403 on connect). No abstract or paper was opened. Search-result
@@ -10,6 +15,9 @@
  *  - Numeric bands are labelled as one of: a published lay-rater threshold range (taken from a review
  *    summary, not read in full), a typical-range assumption, or an app-chosen tolerance. None is a measured
  *    perceptual limit for men. Replace them when verified norm tables are added.
+ *  - Round-2 re-weighting (still 8.0): E04 1.75→1.0, E05 1.5→1.0, E02 0.25→0 (context only), E07 0.5→0.25,
+ *    E15 0.25→0 (health context only), freed 2.0 moved to measured or better-supported metrics: E06 0.75→1.5,
+ *    E01 0.75→1.0, E08 0.5→1.0, E11 0.25→0.5, E12 0.25→0.5. New E17 (resting incisor display) at weight 0.
  *  - Weight accounting against the v0 seed (8.0 → 8.0). Cut where the evidence is weaker than the seed
  *    assumed: E01 1.5 → 0.75 (yellowness split out as E11 at 0.25), E02 0.5 → 0.25, E03 1.0 → 0.5,
  *    E07 1.0 → 0.5. Raised where the evidence is stronger: E04 1.5 → 1.75, E06 0.5 → 0.75. Unchanged:
@@ -41,6 +49,7 @@ const EYE_CLOSEUP_REFUSALS = [
   'coloured or tinted contact lenses',
 ]
 
+// One head-pose limit (3°) is used for every dental smile metric, E04 included, so the rules do not differ by metric.
 const FRONTAL_SMILE_POSE = [
   'head yaw or roll above 3°',
   'head pitch above 3° from level',
@@ -57,7 +66,7 @@ const TEETH_VISIBLE_REFUSALS = [
 ]
 
 const SCALING_NOTE =
-  'Millimetres are scaled from the visible iris width, which is accurate to a few percent on average (see F04 for the scaling error); the larger error is where the landmarks are placed.'
+  'Millimetres are scaled from the visible iris width, which is accurate to a few percent on average (see F04 for the scaling error); the larger error is where the landmarks are placed. Three limits of a 2D photo also apply: the teeth sit in a different depth plane from the iris, so the scale is slightly off for them; wide-angle phone lenses stretch the edges of the frame, so the face must stay near the centre; and one still frame catches a single moment of a moving smile.'
 
 // ───────────────────────── metrics ─────────────────────────
 
@@ -95,14 +104,14 @@ export const metrics: Metric[] = [
     },
     changeability: 'CHANGEABLE',
     changeabilityNote:
-      'Redness from short sleep, dryness or irritation can change within days. Allergy, dry air, eye strain and contact lens wear also redden eyes. The plan lists sleep only, because it is the one lever with experimental support, and that support is mixed.',
-    weight: 0.75,
+      'Redness from short sleep, dryness or irritation can change within days. Allergy, dry air, eye strain and contact lens wear also redden eyes. The plan lists sleep only as a low-confidence lever: the larger randomised trial did not find that sleep loss changed the facial measures it took.',
+    weight: 1,
     weightRationale:
-      'Cut from the seed’s 1.5: the colour effect rests on two studies with edited photos, the sleep link is mixed, and yellowness is split out into E11. The freed weight moved to E04 and E06, where the evidence is stronger and the visible effect larger.',
-    evidence: 'MODERATE',
+      'Cut from the seed’s 1.5 and later set at the WEAK cap of 1: the colour effect rests on two studies with edited photos, the sleep link is not supported by the larger trial, and yellowness is split out into E11. It is measured automatically from a calibrated photo, which is why it kept more weight than the hand-graded metrics.',
+    evidence: 'WEAK',
     evidenceNote:
-      'Two small studies that edited the colour of eye whites found that redder whites were rated less healthy and less attractive. Both used edited photos, not real eyes. The sleep link is mixed: a small study of 10 faces found redder eyes after sleep loss, while a later randomised study of 181 people reportedly found no difference in its facial measures or ratings after one sleepless night.',
-    sourceIds: ['eyes_smile:russell2014', 'eyes_smile:provine2013', 'eyes_smile:sundelin2013', 'eyes_smile:holding2019'],
+      'Two small studies that edited the colour of eye whites found that redder whites were rated less healthy and less attractive. Both used edited photos, not real eyes. The sleep link is mixed: a small study of 10 faces found redder eyes after sleep loss, while a later randomised study of 181 people was reported in search summaries to find no group difference in its facial measures or ratings after one sleepless night (not opened here), so sleep is only a low-confidence lever.',
+    sourceIds: ['eyes_smile:russell2014', 'eyes_smile:provine2013', 'eyes_smile:sundelin2013', 'eyes_smile:holding2019', 'eyes_smile:axelsson2010'], // axelsson2010: sleep-deprived faces rated less healthy and more tired; it does not isolate eye redness
     drivers: ['sleep'],
     captureRequirements: ['eye_closeup'],
     refusalConditions: [
@@ -124,7 +133,7 @@ export const metrics: Metric[] = [
     name: 'Limbal ring (dark ring around the iris)',
     measures: 'How dark and sharp the ring is around the outer edge of the coloured part of the eye (the iris).',
     howMeasured:
-      'Eye close-up with a grey card in the frame and no flash. The app compares brightness across the outer tenth of the iris with the iris just inside it, then maps that to a grade you confirm against reference images: 0 = no ring visible; 1 = faint; 2 = clear; 3 = dark and distinct. A dark brown iris hides the ring, so grade 0 can mean the ring cannot be seen, not that it is absent.',
+      'Eye close-up with a grey card in the frame and no flash. The app compares brightness across the outer tenth of the iris with the iris just inside it, then maps that to a grade you confirm against reference images: 0 = no ring visible; 1 = faint; 2 = clear; 3 = dark and distinct. A dark brown iris hides the ring, so those photos are refused as ‘ring not assessable’ and never get grade 0. The grade is shown for interest and not scored.',
     methods: ['SEGMENTATION_PHOTO', 'SELF_GRADE_REFERENCE'],
     scale: { unit: 'grade', min: 0, max: 3, description: '0 = not visible, 3 = dark and distinct', higherIs: 'better' },
     ideal: {
@@ -137,21 +146,13 @@ export const metrics: Metric[] = [
       populationCaveat:
         'Small student samples and edited faces that were already above average in attractiveness. Light irises show the ring most clearly, so the trait is easier to see for some people than others.',
     },
-    scoring: {
-      kind: 'one_sided',
-      points: [
-        { x: 0, y: 70 },
-        { x: 1, y: 80 },
-        { x: 2, y: 95 },
-        { x: 3, y: 100 },
-      ],
-    },
+    scoring: { kind: 'none', reason: 'context_only' },
     changeability: 'FIXED',
     changeabilityNote:
       'Set by iris structure and fades with age. Lighting and photo angle change how visible it is, but no habit changes it.',
-    weight: 0.25,
+    weight: 0,
     weightRationale:
-      'Cut from the seed’s 0.5 and kept small: the finding is preliminary, the trait is fixed, and the scale is deliberately shallow (the lowest grade still scores 70) so that dark irises are not marked down for something they cannot show.',
+      'Cut from the seed’s 0.5 to zero and shown as context only: the finding is preliminary, the trait is fixed, and people with dark brown irises cannot show the ring, so scoring it would mark them down for something not visible. Iris colour also tracks ancestry.',
     evidence: 'WEAK',
     evidenceNote:
       'One small study with edited faces found that a dark, distinct ring raised attractiveness ratings. It has not been shown to hold in real faces, and the ring is mostly a matter of iris colour and age. Treat it as trivia with a very small weight.',
@@ -161,6 +162,7 @@ export const metrics: Metric[] = [
     refusalConditions: [
       ...COLOUR_REFUSALS,
       ...EYE_CLOSEUP_REFUSALS,
+      'dark brown iris: the ring cannot be assessed (no grade is recorded, and grade 0 is not given)',
       'upper eyelid covering more than a quarter of the iris',
       'iris too small in the close-up to show the ring edge',
     ],
@@ -226,18 +228,18 @@ export const metrics: Metric[] = [
     measures:
       'How straight and evenly spaced the visible front teeth are in a full smile: crowding, twisted teeth, overlap, gaps, and missing or chipped front teeth. The offset of the centre line is scored separately in E12.',
     howMeasured:
-      'Self-grade against reference images on the full-smile photo and a teeth close-up: 0 = straight and evenly spaced; 1 = one tooth turned by a small angle or a small gap; 2 = clear crowding, overlap or several turned teeth; 3 = severe crowding, a missing or broken front tooth, or teeth clearly out of line. The app cannot measure crowding from a phone photo, because the landmark model has no tooth points. Self-grading never gives high confidence. The six upper front teeth must be visible.',
-    methods: ['SELF_GRADE_REFERENCE'],
-    scale: { unit: 'grade', min: 0, max: 3, description: '0 = straight and even, 3 = severe or missing front tooth', higherIs: 'worse' },
+      'Self-grade against reference images on the full-smile photo and a teeth close-up: 0 = straight and evenly spaced; 1 = one tooth turned by a small angle or a small gap; 2 = clear crowding, overlap or several turned teeth; 3 = severe crowding or teeth clearly out of line. A missing or chipped front tooth is not graded here: tick it in the checklist question instead, because no rating study backs it as an alignment grade. The app cannot measure crowding from a phone photo, because the landmark model has no tooth points. Self-grading never gives high confidence. The six upper front teeth must be visible.',
+    methods: ['SELF_GRADE_REFERENCE', 'CHECKLIST'],
+    scale: { unit: 'grade', min: 0, max: 3, description: '0 = straight and even, 3 = severe crowding or clearly out of line', higherIs: 'worse' },
     ideal: {
       summary:
-        'Straight, evenly spaced front teeth. In rating studies, lay raters mark down visibly tilted, offset, gapped or crowded front teeth, and the penalty grows with the size of the problem.',
+        'Straight, evenly spaced front teeth. In rating studies, lay raters marked down tilted tooth edges, centre-line shifts and gaps between the front teeth. Crowding was not tested in the studies we found, so its grade steps are the app’s own.',
       male: { lo: 0, hi: 1 },
       rationale:
         'Studies that edited smile photos found lay raters noticed tilted tooth-edge lines and centre-line shifts of a few millimetres (Kokich et al. 1999; Johnston et al. 1999). A 66-study review of lay raters reports thresholds of about 0 to 4 mm or degrees for several alignment features, with wide variation between studies (Parrini et al. 2016). We did not find a study that says how much crowding should cost, so the grade steps are app-chosen.',
-      confidenceInIdeal: 'medium',
+      confidenceInIdeal: 'low',
       populationCaveat:
-        'Several studies edited a single smile photo, in one case of a young woman, and used raters from one country. Few tested men’s smiles or looked at crowding directly.',
+        'Several studies edited a single smile photo, in one case of a young woman, and used raters from one country. No male data found, and few studies looked at crowding directly.',
     },
     scoring: {
       kind: 'one_sided',
@@ -251,19 +253,19 @@ export const metrics: Metric[] = [
     changeability: 'PROFESSIONAL_ONLY',
     changeabilityNote:
       'Only a dentist or orthodontist can move teeth. Brushing and flossing do not change alignment. The app records the grade and leaves it out of the action plan.',
-    weight: 1.75,
+    weight: 1,
     weightRationale:
-      'The largest weight in this category: teeth are the most visible part of a smile, and alignment has the best-supported dental evidence here. Raised from the seed’s 1.5 using weight freed from E01, E03 and E07, where the evidence is weaker. Weight reflects how much the trait matters to appearance. The action plan leaves it out separately because it is professional-only.',
-    evidence: 'MODERATE',
+      'Cut to 1.0 (from 1.75 and the seed’s 1.5) and moved to metrics that are measured automatically: the grade is the app’s own self-grade, crowding has no rating study, and the only systematic review rates the evidence weak. Only the tilted-edge and gap parts have rating-study support. The action plan leaves it out separately because it is professional-only.',
+    evidence: 'WEAK',
     evidenceNote:
-      'Several studies show lay raters notice and mark down misaligned front teeth, and the penalty grows with the size of the problem. But most tested edited versions of one smile photo, a systematic review of the wider topic rated study quality as weak, and we found no study that sets how much crowding costs. The grade steps are the app’s own.',
+      'Rating studies of edited photos show lay raters mark down tilted tooth edges, centre-line shifts and gaps, so those parts have some support. Most tested edited versions of one smile photo, a systematic review of the wider topic rated study quality as weak, and we found no study of crowding or chipped teeth. The grade steps are the app’s own, so the whole metric is graded WEAK.',
     sourceIds: ['eyes_smile:kokich1999', 'eyes_smile:johnston1999', 'eyes_smile:parrini2016', 'eyes_smile:prado2015'],
     drivers: [],
     captureRequirements: ['frontal_smile', 'teeth_closeup'],
     refusalConditions: [
       ...TEETH_VISIBLE_REFUSALS,
       'fewer than the six upper front teeth visible',
-      'head yaw or roll above 5° in the full-smile photo',
+      'head yaw or roll above 3° in the full-smile photo',
       'teeth too small in the frame to count individually',
     ],
     medicalFlag:
@@ -277,15 +279,15 @@ export const metrics: Metric[] = [
     category: 'eyes_smile',
     name: 'Teeth colour (lightness and yellowness)',
     measures:
-      'How light and how yellow the front teeth look in a calibrated photo, tracked against your own best earlier reading.',
+      'How light and how yellow the front teeth look in a calibrated photo, tracked against your own typical recent reading.',
     howMeasured:
-      'Teeth close-up with a grey card in the frame, no flash and even light. The app finds the two upper centre teeth and keeps the middle third of each, away from the darker gum edge and the more see-through biting edge. It reports the CIELAB lightness (L*) and yellowness (b*) after white balance against the grey card, and scores the colour distance (ΔE) from your best earlier reading. Phone cameras differ, so readings are for tracking your own trend, not for comparing with other people. A dental shade guide is the clinical standard and needs a physical guide.',
+      'Teeth close-up with a grey card in the frame, no flash and even light. The app finds the two upper centre teeth and keeps the middle third of each, away from the darker gum edge and the more see-through biting edge. It reports the CIELAB lightness (L*) and yellowness (b*) after white balance against the grey card, and scores the colour distance (ΔE) from the median of your last 3 to 5 scans, counting only the part above a noise floor measured from repeat captures (grey-card calibration alone can be off by a few ΔE). Phone ΔE is not comparable between phones, or with other people, so it is for your own trend on one phone. A dental shade guide is the clinical standard and needs a physical guide.',
     methods: ['COLOR_CALIBRATED_PHOTO', 'SEGMENTATION_PHOTO'],
     scale: {
-      unit: 'ΔE (CIELAB) from your best earlier reading',
+      unit: 'ΔE (CIELAB) from the median of your last 3 to 5 scans',
       min: 0,
       max: null,
-      description: 'Colour distance from your lightest, least yellow earlier reading; higher means darker or yellower',
+      description: 'Colour distance from your recent median reading, after the noise floor; higher means darker or yellower',
       higherIs: 'worse',
     },
     ideal: {
@@ -293,7 +295,7 @@ export const metrics: Metric[] = [
         'No numeric target. Lighter teeth are rated more attractive than darker ones, but the very lightest shades are not the most attractive and the preferred shade depends on skin tone.',
       male: null,
       rationale:
-        'In rating experiments with edited photos, teeth edited lighter were rated best and teeth edited darker were rated worst (Newton et al. 2021). A study of 140 raters found that the brightest shade was not rated most attractive, and that very bright teeth against dark skin or dark teeth against fair skin were rated as unattractive (JADA 2009). Because the preferred shade depends on skin tone, the app scores drift from your own best reading instead of a fixed shade.',
+        'One rating experiment with edited photos found teeth edited lighter were rated best and teeth edited darker worst (Newton et al. 2021). A study of 140 raters found the brightest shade was not rated most attractive, and that very bright teeth against dark skin or dark teeth against fair skin were rated as unattractive (JADA 2009), so the two studies do not simply agree that lighter is better. Because the preferred shade depends on skin tone, the app scores drift from your own recent level instead of a fixed shade.',
       confidenceInIdeal: 'low',
       populationCaveat:
         'Rating studies used digitally edited photos, mostly of Caucasian faces and raters. The preferred shade changes with skin tone, so no single value fits everyone.',
@@ -301,17 +303,17 @@ export const metrics: Metric[] = [
     scoring: {
       kind: 'personal_baseline',
       direction: 'lower_better',
-      note: 'No absolute anchor: the preferred shade depends on skin tone and no verified norm exists for phone-photo readings. The score falls as the teeth drift darker or yellower than your own best earlier reading. It cannot tell naturally darker teeth from stained teeth, which is intended: it rewards keeping what you have, not reaching a shade.',
+      note: 'No absolute anchor: the preferred shade depends on skin tone and no verified norm exists for phone-photo readings. The score falls only when the teeth read darker or yellower than the median of your last 3 to 5 scans by more than a noise floor taken from repeat captures, so ordinary phone noise is not counted as drift. It cannot tell naturally darker teeth from stained teeth, which is intended: it rewards keeping what you have, not reaching a shade.',
     },
     changeability: 'CHANGEABLE',
     changeabilityNote:
       'Part habit, part fixed. Surface stain from dark drinks and tobacco builds up with exposure, and habits can slow it. The tooth’s own base shade is set by genes and tends to darken with age. Changing the base shade is dentist-only work and is not part of the action plan. Smoking and vaping are tracked in X10.',
-    weight: 1.5,
+    weight: 1,
     weightRationale:
-      'Kept at the seed’s 1.5: two rating studies agree that tooth colour affects how a smile is judged, and part of it is within reach of daily habits. It is not raised further because phone colour readings are noisy and the habit evidence is thin.',
-    evidence: 'MODERATE',
+      'Cut from the seed’s 1.5 to the WEAK cap of 1: two studies of edited photos (one found the lightest shade was not preferred) support the effect, phone colour readings are noisy, and the habit lever rests only on a 1997 chemistry review.',
+    evidence: 'WEAK',
     evidenceNote:
-      'Rating experiments with edited photos found that lighter teeth look better than darker ones, though the lightest shades and mismatched skin tones were not preferred. The habit lever is much weaker: stain-avoidance advice rests on how stains form, not on trials. These habits slow new surface stain. They do not change the tooth’s own shade.',
+      'Two rating experiments with edited photos, mostly of Caucasian faces and raters, found that lighter teeth look better than darker ones, though the lightest shades and mismatched skin tones were not preferred. The habit lever is much weaker: stain-avoidance advice rests on how stains form, not on trials. These habits slow new surface stain. They do not change the tooth’s own shade.',
     sourceIds: ['eyes_smile:newton2021', 'eyes_smile:jada2009', 'eyes_smile:nathoo1997'],
     drivers: ['oral_hygiene_habits', 'nutrition_structure'],
     captureRequirements: ['teeth_closeup'],
@@ -334,7 +336,7 @@ export const metrics: Metric[] = [
     name: 'Gum show at full smile',
     measures: 'How much gum shows above the upper front teeth when you smile fully.',
     howMeasured:
-      'Frontal full-smile photo. You tap the gum edge above the middle of an upper centre tooth and the lower edge of the upper lip, and the app converts the vertical distance to millimetres. 0 = the lip sits at the gum edge; positive = gum visible; negative = the lip still covers part of the tooth. A held, posed grin shows more gum than a natural smile, so capture is standardised as a full smile and the largest of three readings is used. ' +
+      'Frontal full-smile photo. You tap the gum edge above the middle of an upper centre tooth and the lower edge of the upper lip, and the app converts the vertical distance to millimetres. 0 = the lip sits at the gum edge; positive = gum visible; negative = the lip still covers part of the tooth. A held, posed grin shows more gum than a natural smile, so capture is standardised as a full smile and the median of three readings is used. ' +
       SCALING_NOTE,
     methods: ['MANUAL_LANDMARKS', 'AUTO_FRONTAL_PHOTO'],
     scale: {
@@ -346,13 +348,13 @@ export const metrics: Metric[] = [
     },
     ideal: {
       summary:
-        'Up to about 2 mm of gum. Lay raters in several studies accepted up to roughly 3 mm, and thresholds reported across studies run from about 1.5 to 4 mm.',
+        'Up to about 2 mm of gum for full marks (the app’s own stricter band). Lay raters in several studies accepted up to roughly 3 mm, and thresholds reported across studies run from about 1.5 to 4 mm.',
       male: { lo: null, hi: 2 },
       rationale:
-        'A systematic review of lay-rater studies lists gum-exposure thresholds from 1.5 to 4 mm (Parrini et al. 2016). Secondary reports of Kokich et al. (1999) put the lay threshold at about 3 to 4 mm, with orthodontists stricter. A 2022 review of 34 studies, as summarised in search results, reported that about 3 mm was acceptable. Because studies disagree, full marks run to 2 mm and points fall gradually after 3 mm.',
+        'A systematic review of lay-rater studies lists gum-exposure thresholds from 1.5 to 4 mm (Parrini et al. 2016). A 2022 review of 34 studies, known only from a search summary, reported about 3 mm as acceptable. Only Parrini’s range is used as the evidence for the band. Because studies disagree, the app’s own choice is full marks to 2 mm, which is stricter than the reviewed lay figure of about 3 mm, with points falling gradually after that.',
       confidenceInIdeal: 'medium',
       populationCaveat:
-        'Thresholds vary between rater groups and studies, many studies edited a single photo, and some found laypeople accepted far more gum when the rest of the face was balanced.',
+        'No male data found. Thresholds vary between rater groups and studies, many studies edited a single photo, and some found laypeople accepted far more gum when the rest of the face was balanced.',
     },
     scoring: {
       kind: 'one_sided',
@@ -368,13 +370,13 @@ export const metrics: Metric[] = [
     changeability: 'SURGICAL_ONLY',
     changeabilityNote:
       'Set by lip length and movement, upper-jaw height and tooth length. A smaller smile hides gum in photos but does not change the trait. Only a dentist or surgeon can change it, so the app leaves it out of the action plan.',
-    weight: 0.75,
+    weight: 1.5,
     weightRationale:
-      'Raised from the seed’s 0.5: several rating studies and two reviews give lay-rater thresholds for gum show, so the evidence is among the stronger in this category. The extra weight came from E01.',
+      'Raised from the seed’s 0.5: a systematic review gives lay-rater thresholds for gum show, so the evidence is among the stronger in this category, and the reading is partly automatic. The extra weight came from E04 and E05, where the evidence is weaker. None of the sources was opened, so this weight should be revisited once they are checked.',
     evidence: 'MODERATE',
     evidenceNote:
-      'Several rating studies and two reviews give lay-rater thresholds for gum show, but the thresholds differ by study, rater group and face, and most studies used edited photos. The scoring curve uses the middle of that range.',
-    sourceIds: ['eyes_smile:kokich1999', 'eyes_smile:parrini2016', 'eyes_smile:gingival_review2022'],
+      'A systematic review (Parrini) and a second review known only from a search summary give lay-rater thresholds for gum show, but the thresholds differ by study, rater group and face, and most studies used edited photos. The scoring curve uses the middle of that range.',
+    sourceIds: ['eyes_smile:parrini2016', 'eyes_smile:gingival_review2022'],
     drivers: [],
     captureRequirements: ['frontal_smile', 'teeth_closeup'],
     refusalConditions: [
@@ -394,9 +396,9 @@ export const metrics: Metric[] = [
     measures:
       'How level and balanced the two sides of your smile are: the height of the mouth corners and their distance from the face centre line.',
     howMeasured:
-      'Automatic: face-landmark model on the full-smile photo. Corner heights are measured perpendicular to the line through the pupils, and corner distances from the face centre line are compared left against right. The reported value is the larger of the two mismatches as a percent of the pupil distance, taken as the median of three full-smile frames. Head tilt and turn are refused, because they create mismatch that is not in the smile.',
+      'Automatic: face-landmark model on the full-smile photo. Corner heights are measured perpendicular to the line through the pupils, and corner distances from the face centre line are compared left against right. The corner-height mismatch and the corner-distance mismatch are reported separately, each as a percent of the pupil distance and as the median of three full-smile frames; the score uses the larger of the two, but the user sees both. Head tilt and turn are refused, because they create mismatch that is not in the smile.',
     methods: ['AUTO_FRONTAL_PHOTO'],
-    scale: { unit: '% of pupil distance', min: 0, max: null, description: 'Larger of the corner-height and corner-distance mismatches', higherIs: 'worse' },
+    scale: { unit: '% of pupil distance', min: 0, max: null, description: 'Larger of the corner-height and corner-distance mismatches (both are also shown separately)', higherIs: 'worse' },
     ideal: {
       summary:
         'Small mismatch. Natural smiles are never perfectly even, and no study gives the amount at which people notice.',
@@ -417,9 +419,9 @@ export const metrics: Metric[] = [
     changeability: 'FIXED',
     changeabilityNote:
       'Muscle habit may shift which side lifts more, but we found no evidence that practice changes smile symmetry, so no lever is offered.',
-    weight: 0.5,
+    weight: 0.25,
     weightRationale:
-      'Cut from the seed’s 1.0: no study sets a threshold for mouth-corner mismatch and a single photo catches one moment of a moving smile. The freed weight moved to E04 and E06.',
+      'Cut from the seed’s 1.0 to 0.25: no study sets a threshold for mouth-corner mismatch and a single photo catches one moment of a moving smile. The freed weight moved to measured and better-supported metrics.',
     evidence: 'WEAK',
     evidenceNote:
       'Related smile features have lay-rater thresholds, but we found none for mouth-corner mismatch. The scoring band is the app’s own assumption.',
@@ -464,9 +466,9 @@ export const metrics: Metric[] = [
     changeability: 'CHANGEABLE',
     changeabilityNote:
       'Practice and relaxing before the shot change how much the eyes take part. This changes how smiles look in photos. It does not change your face.',
-    weight: 0.5,
+    weight: 1,
     weightRationale:
-      'Kept at the seed’s 0.5 and capped at WEAK: the effect is smallest for still photos and posed smiles, which is exactly what the app captures.',
+      'Raised to the WEAK cap of 1 because it is measured automatically and is compared with your own best smile, not a population norm. Capped at WEAK because the effect is smallest for still photos and posed smiles, which is exactly what the app captures.',
     evidence: 'WEAK',
     evidenceNote:
       'A meta-analysis finds Duchenne smiles rated as more genuine, but the effect is smaller for photos and posed smiles, and one lab study found the eye marker can be produced on demand and may follow smile size. Downgraded from the seed’s moderate rating for photo use.',
@@ -498,7 +500,7 @@ export const metrics: Metric[] = [
         'Flat or only faintly full lower lids. A bag that is the same morning and evening is structural and will not change with habits.',
       male: { lo: 0, hi: 1 },
       rationale:
-        'In a sleep-loss experiment, observers rated sleep-deprived faces as having more swollen eyes (Sundelin et al. 2013), but no study rated puffiness on its own. The 0 to 1 band is clinical convention, and the grade steps are app-chosen.',
+        'In a sleep-loss experiment, observers rated sleep-deprived faces as having more swollen eyes (Sundelin et al. 2013), but no study rated puffiness on its own. The 0 to 1 full-marks band is an app choice, not taken from a named clinical grading scale, and the grade steps are app-chosen.',
       confidenceInIdeal: 'low',
       populationCaveat: 'Sleep-loss studies were small and used one night of total sleep deprivation in young adults.',
     },
@@ -513,15 +515,15 @@ export const metrics: Metric[] = [
     },
     changeability: 'FIXED_BUT_VISIBILITY_CHANGEABLE',
     changeabilityNote:
-      'Fat pads and skin set the structural part, which fixed habits cannot change. The fluid part varies by time of day and between nights. Sleep is the only lever with any experimental support, and that support is mixed. Whether salt intake or alcohol timing changes lower-lid puffiness has not been tested in men as far as we found.',
+      'Fat pads and skin set the structural part, which fixed habits cannot change. The fluid part varies by time of day and between nights. Sleep is the only lever listed, with weak support only: a larger randomised trial did not confirm that sleep loss changes the facial measures it took. Whether salt intake or alcohol timing changes lower-lid puffiness has not been tested in men as far as we found.',
     weight: 0.5,
     weightRationale:
       'New metric, kept at 0.5 under the WEAK cap: puffiness is visible and partly changeable, but the evidence is indirect. The weight came from the E01, E03 and E07 cuts.',
     evidence: 'WEAK',
     evidenceNote:
-      'Sleep-loss studies list swollen eyes among the cues observers notice, but they rated whole faces, not puffiness alone, one used only 10 faces, and a later randomised study of 181 people reportedly found no difference in its facial measures or ratings after a sleepless night. Treat this as a tracking metric with a small weight.',
-    sourceIds: ['eyes_smile:sundelin2013', 'eyes_smile:axelsson2010', 'eyes_smile:holding2019'],
-    drivers: ['sleep', 'nutrition_structure'],
+      'Sleep-loss studies list swollen eyes among the cues observers notice, but they rated whole faces, not puffiness alone, one used only 10 faces, and a later randomised study of 181 people was reported in search summaries to find no difference in its facial measures or ratings after a sleepless night. Treat this as a tracking metric with a small weight.',
+    sourceIds: ['eyes_smile:sundelin2013', 'eyes_smile:holding2019'],
+    drivers: ['sleep'], // weak support: the larger randomised sleep trial did not show a change; no tested diet lever
     captureRequirements: ['eye_closeup', 'skin_sidelight'],
     refusalConditions: [
       'morning and evening shots taken at different distances or from different light directions',
@@ -619,9 +621,9 @@ export const metrics: Metric[] = [
     changeability: 'FIXED',
     changeabilityNote:
       'Mostly set by age and natural pigment. No habit lever is offered. The app watches this value for change, because a persistent new yellow tinge needs a doctor, not a plan.',
-    weight: 0.25,
+    weight: 0.5,
     weightRationale:
-      'Split out of the seed’s E01 (1.5). Kept small because it is a single study, mostly fixed, and hard to read from a phone photo. Its main job is to watch for a health change.',
+      'Split out of the seed’s E01 (1.5). Raised to 0.5 because it is measured automatically against your own baseline. Kept small because it is a single study, mostly fixed, and hard to read from a phone photo. Its main job is to watch for a health change.',
     evidence: 'WEAK',
     evidenceNote:
       'One study with edited photos of white women found that less yellow in the eye whites made faces look younger and healthier. Natural variation is large and room light can fake a tint. This is mainly a watch for health change.',
@@ -657,9 +659,9 @@ export const metrics: Metric[] = [
       male: { lo: 0, hi: 1 },
       rationale:
         'In a study that moved the tooth centre line on one smile photo, raters scored the smile lower as the offset grew, and the authors estimated a 56% chance that a layperson gave a lower score at 2 mm (Johnston et al. 1999). A review of lay raters reports midline thresholds from 0 to 3 mm across studies (Parrini et al. 2016). Full marks run to 1 mm, with a gradual decline after that.',
-      confidenceInIdeal: 'medium',
+      confidenceInIdeal: 'low',
       populationCaveat:
-        'The key study moved the tooth centre line on one photo of a young woman and used 20 young adult laypeople. Thresholds differ across studies.',
+        'No male data found. The key study moved the tooth centre line on one photo of a young woman and used 20 young adult laypeople. Thresholds differ across studies.',
     },
     scoring: {
       kind: 'one_sided',
@@ -674,9 +676,9 @@ export const metrics: Metric[] = [
     changeability: 'PROFESSIONAL_ONLY',
     changeabilityNote:
       'Only a dentist or orthodontist can shift teeth. A head turn or tilt in the photo changes the reading, which is why capture is strict.',
-    weight: 0.25,
+    weight: 0.5,
     weightRationale:
-      'New metric, kept at 0.25: the effect is real in the studies we found but small for a few millimetres, and part of the same dental region is already scored in E04.',
+      'New metric at 0.5: the effect is seen in the studies we found but small for a few millimetres, and part of the same dental region is scored in E04. Raised from 0.25 because the reading is partly measured, with the confidence in the band set to low.',
     evidence: 'MODERATE',
     evidenceNote:
       'A study and a review of lay raters agree that larger centre-line offsets are marked down, but thresholds range from 0 to 3 mm and the key study used one edited photo. The score curve is the app’s own, drawn inside that range.',
@@ -798,32 +800,24 @@ export const metrics: Metric[] = [
     scale: { unit: 'grade', min: 0, max: 3, description: '0 = pale pink and firm, 3 = deep red and swollen', higherIs: 'worse' },
     ideal: {
       summary:
-        'Pale pink, firm gum edges. In one rating study, laypeople scored inflamed gums among the least attractive smile features.',
+        'Pale pink, firm gum edges. This is tracked as a dental-health sign. We have no verified rating evidence on how gum redness affects looks.',
       male: { lo: 0, hi: 1 },
       rationale:
-        'A study that edited smile photos found laypeople rated inflamed gums as one of the least attractive features. It tested edited images, not real gum redness, so the effect size is unknown. Gum inflammation also matters for dental health regardless of looks.',
+        'Gum inflammation caused by plaque is well established (Löe et al. 1965) and matters for dental health regardless of looks. We could not verify any study of how gum redness changes appearance ratings, so no appearance claim is made.',
       confidenceInIdeal: 'low',
-      populationCaveat: 'The rating study used digitally altered photos; the author list and sample were not confirmed.',
+      populationCaveat: 'Self-graded from a phone photo; gum colour varies naturally between people, including natural darker pigment.',
     },
-    scoring: {
-      kind: 'one_sided',
-      points: [
-        { x: 0, y: 100 },
-        { x: 1, y: 100 },
-        { x: 2, y: 75 },
-        { x: 3, y: 40 },
-      ],
-    },
+    scoring: { kind: 'none', reason: 'context_only' },
     changeability: 'CHANGEABLE',
     changeabilityNote:
-      'Gum redness from plaque build-up usually eases within days to a few weeks of consistent brushing and cleaning between teeth (general dental teaching; timing not confirmed here). Redness that does not ease needs a dentist.',
-    weight: 0.25,
+      'Gum redness from plaque build-up is linked to plaque left on the teeth, so careful daily brushing and cleaning between the teeth is the lever. We give no timeline because we could not source one. Redness that does not ease needs a dentist.',
+    weight: 0,
     weightRationale:
-      'New metric, kept small and under the WEAK cap: the appearance evidence is one rating study of edited photos. Gum health matters more for health than for looks, so the weight is not raised.',
+      'Health-only context at weight 0: the one appearance source (an unidentified rating study) could not be resolved and was removed, so there is no verified appearance evidence. Gum health matters for health, not looks, and is tracked for that reason.',
     evidence: 'WEAK',
     evidenceNote:
-      'One rating study with edited smile photos found laypeople scored inflamed gums as unattractive. No study rated real gum redness. The link between plaque and gum inflammation is well established, but that concerns health, not looks.',
-    sourceIds: ['eyes_smile:microesthetics', 'eyes_smile:loe1965'],
+      'No verified study rated gum redness for looks. The link between plaque and gum inflammation is well established, but that concerns health, not looks, so this metric is tracked as health context only.',
+    sourceIds: ['eyes_smile:loe1965'],
     drivers: ['oral_hygiene_habits'],
     captureRequirements: ['teeth_closeup'],
     refusalConditions: [
@@ -833,7 +827,7 @@ export const metrics: Metric[] = [
       'photo taken within 30 minutes of flossing or brushing',
     ],
     medicalFlag:
-      'Gums that bleed on most days for more than two weeks despite careful cleaning, swollen gums, gums pulling back from the teeth, loose teeth, or a lasting bad taste or breath should be checked by a dentist. The app cannot tell the cause.',
+      'Gums that keep bleeding after consistent careful cleaning, swollen gums, gums pulling back from the teeth, loose teeth, or a lasting bad taste or breath should be checked by a dentist. The app cannot tell the cause.',
     phase: 'V2',
   },
 
@@ -858,9 +852,9 @@ export const metrics: Metric[] = [
       summary: 'No target. Context for reading tooth colour (E05), not a goal.',
       male: null,
       rationale:
-        'Dental colour studies report that surrounding skin, gum and lip colour changes how tooth colour differences are judged (JADA 2009; Lindsey et al. 2010), but the studies were small and none gives a contrast value to aim for.',
+        'Dental colour studies report that surrounding skin, gum and lip colour changes how tooth colour differences are judged (JADA 2009), but that is one study of an edited portrait and it gives no contrast value to aim for.',
       confidenceInIdeal: 'low',
-      populationCaveat: 'The studies used small rater groups and edited portraits of limited skin tones.',
+      populationCaveat: 'The study used an edited portrait with a limited range of skin tones.',
     },
     scoring: { kind: 'none', reason: 'context_only' },
     changeability: 'FIXED',
@@ -871,8 +865,8 @@ export const metrics: Metric[] = [
       'Context only: it explains E05 readings and adds no separate appearance effect that could be scored without counting tooth colour twice.',
     evidence: 'WEAK',
     evidenceNote:
-      'Small studies and dental teaching say surrounding colours change how tooth shade looks. No study gives a contrast value that looks best, so this is shown as context and not scored.',
-    sourceIds: ['eyes_smile:jada2009', 'eyes_smile:lindsey2010'],
+      'One small study and dental teaching say surrounding colours change how tooth shade looks. No study gives a contrast value that looks best, so this is shown as context and not scored.',
+    sourceIds: ['eyes_smile:jada2009'],
     drivers: [],
     captureRequirements: ['teeth_closeup'],
     refusalConditions: [
@@ -880,6 +874,57 @@ export const metrics: Metric[] = [
       ...TEETH_VISIBLE_REFUSALS,
       'lipstick or lip product visible on the lips',
       'gum or lip strip next to the teeth not visible on both sides',
+    ],
+    phase: 'V2',
+  },
+  // ── E17 ──────────────────────────────────────────────────────────────
+  {
+    id: 'E17',
+    category: 'eyes_smile',
+    name: 'Resting incisor display (tooth shown with the lip relaxed)',
+    measures:
+      'How much of the upper front teeth shows below the upper lip when your face and lips are relaxed and your mouth is closed to just parted. It sits next to the full-smile gum show in E06.',
+    howMeasured:
+      'Frontal neutral photo with the lips relaxed and just parted. You tap the lower edge of the upper lip and the edge of the upper centre tooth, and the app converts the vertical distance to millimetres, positive when tooth shows and negative when the lip covers it. The median of three readings is used. Tooth display at rest changes with age, lip tension and how the mouth is held. ' +
+      SCALING_NOTE,
+    methods: ['MANUAL_LANDMARKS'],
+    scale: {
+      unit: 'mm',
+      min: null,
+      max: null,
+      description: 'Upper front tooth visible below the relaxed upper lip; negative = lip covers tooth',
+      higherIs: 'not_applicable',
+    },
+    ideal: {
+      summary:
+        'No target. The amount of tooth shown at rest is tracked as context for reading smile and gum show (E06). We have not verified a rating threshold for it.',
+      male: null,
+      rationale:
+        'Dental teaching treats resting tooth display as part of smile planning and as falling with age, but we did not open a rating study that sets an amount raters prefer, so no band is claimed.',
+      confidenceInIdeal: 'low',
+      populationCaveat: 'No male-specific rating data verified. Lip tension changes the reading from shot to shot.',
+    },
+    scoring: { kind: 'none', reason: 'context_only' },
+    changeability: 'PROFESSIONAL_ONLY',
+    changeabilityNote:
+      'Set by lip length, tooth length and age. Only a dentist or surgeon can change it, so the app leaves it out of the action plan.',
+    weight: 0,
+    weightRationale:
+      'Context only until a rating threshold is verified; E06 already scores the gum part of the smile, so scoring this too would count the same region twice.',
+    evidence: 'WEAK',
+    evidenceNote:
+      'No opened study sets a preferred resting tooth display, so this is tracked and not scored. It is kept to help explain E06 readings.',
+    sourceIds: ['eyes_smile:parrini2016'],
+    drivers: [],
+    captureRequirements: ['frontal_neutral'],
+    refusalConditions: [
+      'head yaw or roll above 3°',
+      'head pitch above 3° from level',
+      'face outside the central 50% of the frame',
+      'estimated camera distance under 1.2 m',
+      'lips tensed, pressed or pursed instead of relaxed',
+      'upper lip edge or tooth edge hidden by shadow or facial hair',
+      'iris not detected, so no scale is available',
     ],
     phase: 'V2',
   },
@@ -948,7 +993,7 @@ export const sources: Source[] = [
     verified: false,
     verificationNote:
       NOT_OPENED +
-      'Search summaries agreed on the design (181 participants randomised to one night of total sleep deprivation or normal sleep, then photographed) but disagreed on the results. The catalog relies on the version that reported no group difference in the facial measures it took or in observer ratings. If the result is read and differs, E01 and E09 should be revisited.',
+      'Search summaries agreed on the design (181 participants randomised to one night of total sleep deprivation or normal sleep, then photographed) and, in the version relied on here, on no group difference in the facial measures it took or in observer ratings. A later search by another reviewer also supported this, but the abstract was still not opened here. If the full result differs, E01 and E09 should be revisited.',
     supports: 'A larger randomised study reportedly did not confirm that one sleepless night changes the facial measures or ratings',
   },
   {
@@ -984,8 +1029,8 @@ export const sources: Source[] = [
     verified: false,
     verificationNote:
       NOT_OPENED +
-      'A search summary reported that smile photos were edited with eight common front-tooth problems (crown length and width, incisor angle, centre line, gum margin, tooth-edge line, gum-to-lip distance and others), and that orthodontists, general dentists and laypeople rated them. Secondary reports put the lay threshold for gum show at about 3 to 4 mm; sources differed. Crowding was not among the listed alterations.',
-    supports: 'Lay raters mark down tilted tooth-edge lines, centre-line shifts and excess gum show once they reach a few millimetres',
+      'A search summary reported that smile photos were edited with eight common front-tooth problems (crown length and width, incisor angle, centre line, gum margin, tooth-edge line, gum-to-lip distance and others), and that orthodontists, general dentists and laypeople rated them. Secondary reports put the lay threshold for gum show at about 3 to 4 mm; sources differed, so that figure is not used in E06. Crowding was not among the listed alterations, so this source does not support any crowding penalty.',
+    supports: 'Lay raters mark down tilted tooth-edge lines and centre-line shifts once they reach a few millimetres (crowding was not tested)',
   },
   {
     id: 'eyes_smile:johnston1999',
@@ -1030,7 +1075,7 @@ export const sources: Source[] = [
     id: 'eyes_smile:newton2021',
     kind: 'peer_reviewed',
     citation:
-      'Newton, J. T., et al. (2021). Effect of tooth colour on subjective ratings of social judgements in Caucasian adults. Journal of Dentistry, 112, 103771. Title paraphrased from the abstract; not confirmed.',
+      'Newton, J. T., et al. (2021). Effect of tooth colour on subjective ratings of social judgements in Caucasian adults. Journal of Dentistry, 112, 103771. The exact title and author list were not confirmed because the DOI could not be opened (no working fetch this session); treat this citation as unresolved.',
     // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://doi.org/10.1016/j.jdent.2021.103771',
     verified: false,
@@ -1043,7 +1088,7 @@ export const sources: Source[] = [
     id: 'eyes_smile:jada2009',
     kind: 'peer_reviewed',
     citation:
-      'Assessing the influence of skin color and tooth shade value on perceived smile attractiveness. Journal of the American Dental Association, 140(6), 696–705 (2009). Authors not confirmed in this session.',
+      'Assessing the influence of skin color and tooth shade value on perceived smile attractiveness. Journal of the American Dental Association, 140(6), 696–705 (2009). Authors not confirmed: the record could not be opened this session, so this citation is unresolved.',
     // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://doi.org/10.14219/jada.archive.2009.0256',
     verified: false,
@@ -1051,17 +1096,6 @@ export const sources: Source[] = [
       NOT_OPENED +
       'A search summary reported 70 dentists and 70 laypeople rating 24 versions of one edited smile photo with four skin tones and six tooth brightness values. Both groups did not rate the brightest teeth most attractive, and dark skin with very bright teeth and fair skin with dark teeth were rated as relatively unattractive. The figures come from the abstract summary and a trade write-up.',
     supports: 'The brightest tooth shade was not rated most attractive, and the preferred shade depended on skin tone',
-  },
-  {
-    id: 'eyes_smile:lindsey2010',
-    kind: 'peer_reviewed',
-    citation:
-      'Lindsey, D. T., et al. (2010). Study of how skin and gum colour change the judging of tooth-colour differences in facial portraits. Journal of Dental Research. Title paraphrased; authors and details not confirmed.',
-    verified: false,
-    verificationNote:
-      NOT_OPENED +
-      'A search summary reported a small study (10 evaluators viewing facial portraits) in which skin and gum colour changed how sensitive people were to tooth-colour differences. The author list, title and volume were not confirmed.',
-    supports: 'Surrounding skin and gum colour changes how tooth-colour differences are judged',
   },
   {
     id: 'eyes_smile:nathoo1997',
@@ -1165,23 +1199,12 @@ export const sources: Source[] = [
     id: 'eyes_smile:gingival_review2022',
     kind: 'peer_reviewed',
     citation:
-      'The threshold of acceptability of excessive gingival display by laypersons: a systematic review. International Journal of Esthetic Dentistry (2022). Authors not confirmed in this session.',
+      'The threshold of acceptability of excessive gingival display by laypersons: a systematic review. International Journal of Esthetic Dentistry (2022). Authors and DOI not confirmed: the record could not be opened this session, so this citation is unresolved.',
     verified: false,
     verificationNote:
       NOT_OPENED +
       'A search summary reported a review of 34 studies that concluded about 3 mm of gum exposure was acceptable to laypeople. Details of how studies were pooled were not confirmed.',
     supports: 'Laypeople in the reviewed studies generally accepted about 3 mm of gum show',
-  },
-  {
-    id: 'eyes_smile:microesthetics',
-    kind: 'peer_reviewed',
-    citation:
-      'Smile microesthetics as perceived by dental professionals and laypersons (rating study using digitally altered smile photographs). Journal, year and authors not confirmed in this session.',
-    verified: false,
-    verificationNote:
-      NOT_OPENED +
-      'A search summary reported that laypeople rated pigmented or inflamed gums among the least attractive smile features in edited photographs, while dentists by specialty ranked the features differently. How inflammation was simulated was not confirmed.',
-    supports: 'Laypeople scored inflamed gums as unattractive in edited smile photographs',
   },
   {
     id: 'eyes_smile:loe1965',

@@ -39,3 +39,12 @@ describe('settings helpers', () => {
     expect(judgeOrigins(0, []).ok).toBe(false)
   })
 })
+
+describe('tableLabel fallback', () => {
+  it('humanises unknown table names', async () => {
+    const { tableLabel } = await import('../../src/routes/settings/helpers')
+    expect(tableLabel('kv')).toBe('Settings values')
+    expect(tableLabel('measurement_sessions')).toBe('Measurement sessions')
+    expect(tableLabel('photoBlobs')).toBe('Photo blobs')
+  })
+})

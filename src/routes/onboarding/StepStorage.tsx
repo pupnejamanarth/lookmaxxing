@@ -21,7 +21,7 @@ export default function StepStorage({ profile, next, back }: StepProps) {
           decides. It can refuse.
         </p>
         <Button variant="primary" icon="shield" onClick={ask} loading={busy} fullWidth>
-          {persisted === null ? 'Ask for persistent storage' : 'Ask again'}
+          {persisted === null ? 'Ask for persistent storage' : 'Try again'}
         </Button>
         {error ? (
           <Banner tone="danger" live>
@@ -36,7 +36,7 @@ export default function StepStorage({ profile, next, back }: StepProps) {
           ) : persisted === false ? (
             <Banner tone="warn" title="Not granted">
               The browser may delete your data if space runs low. A regular backup is the real protection. Export one from Settings every
-              week.
+              week. Browsers often refuse a repeat request.
             </Banner>
           ) : null}
         </div>

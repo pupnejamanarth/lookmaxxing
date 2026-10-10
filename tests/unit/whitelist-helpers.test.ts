@@ -4,6 +4,7 @@ import {
   CATEGORY_LABEL,
   CATEGORY_ORDER,
   canMarkPassed,
+  hasIrritationHold,
   canToggleActive,
   describeError,
   needsPatchTest,
@@ -68,5 +69,21 @@ describe('whitelist helpers', () => {
     const msgs = (['duplicate', 'invalid', 'forbidden', 'not_found'] as const).map((c) => describeError(new StoreError(c, 'Name cannot be empty')))
     expect(new Set(msgs).size).toBe(4)
     expect(describeError(new Error('boom'))).not.toContain('boom')
+  })
+
+  it('holds the pass while the newest entry is mild irritation', () => {
+    const mild = { patchTest: { status: 'in_progress' as const, startedAt: T0, entries: [{ ts: T0, result: 'mild_irritation' as const, note: '' }] } }
+    expect(hasIrritationHold(mild)).toBe(true)
+    expect(canMarkPassed(mild, T0 + 8 * DAY)).toBe(false)
+    const clean = { patchTest: { ...mild.patchTest, entries: [...mild.patchTest.entries, { ts: T0 + DAY, result: 'no_reaction' as const, note: '' }] } }
+    expect(canMarkPassed(clean, T0 + 8 * DAY)).toBe(true)
+  })
+
+  it('gives distinct plain messages per code and hides unknown errors', () => {
+    expect(describeError(new StoreError('duplicate', 'x'))).toContain('already have')
+    expect(describeError(new StoreError('invalid', 'Name too long'))).toContain('Name too long')
+    expect(describeError(new StoreError('forbidden', 'Locked.'))).toContain('Locked.')
+    expect(describeError(new StoreError('not_found', 'x'))).toContain('no longer exists')
+    expect(describeError('weird')).toContain('Nothing was sent')
   })
 })

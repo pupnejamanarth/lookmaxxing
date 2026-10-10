@@ -1,6 +1,10 @@
-import { PageHeader } from '../ui'
+import { useRoute } from '../router'
+import MetricDetail from './MetricDetail'
+import MetricList from './catalog/MetricList'
 
-/** Placeholder. The metric browser (list and detail) replaces this file. */
+/** #/metrics is the browser, #/metrics/:id is one metric. */
 export default function Metrics() {
-  return <PageHeader title="Metrics" subtitle="This screen is not built yet." />
+  const { segments } = useRoute()
+  const id = segments[1]
+  return id ? <MetricDetail id={id} /> : <MetricList />
 }

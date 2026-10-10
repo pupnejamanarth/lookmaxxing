@@ -13,6 +13,7 @@ export default function Whitelist() {
   const { value: items, loading, error } = useLive(() => store.listWhitelist(), [])
   const [sheet, setSheet] = useState<SheetState>(null)
   const [removing, setRemoving] = useState<WhitelistItem | null>(null)
+  const [lastRemoving, setLastRemoving] = useState<WhitelistItem | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -21,13 +22,13 @@ export default function Whitelist() {
   }, [])
 
   const add = (
-    <Button variant="primary" icon="plus" size="sm" onClick={() => setSheet({ item: null })}>
+    <Button variant="primary" icon="plus" onClick={() => setSheet({ item: null })}>
       Add
     </Button>
   )
 
   return (
-    <div className="u-stack">
+    <div className="u-stack wl-page">
       <PageHeader title="My current stack" back={{ to: '/settings', label: 'Settings' }} actions={add} />
       <Banner tone="info">
         This list is the only set of products the app may ever mention. It starts empty. The app never suggests entries.
@@ -58,7 +59,10 @@ export default function Whitelist() {
         <ul className="wl-list">
           {items?.map((item) => (
             <li key={item.id}>
-              <ItemCard item={item} now={now} onEdit={() => setSheet({ item })} onRemove={() => setRemoving(item)} />
+              <ItemCard item={item} now={now} onEdit={() => setSheet({ item })} onRemove={() => {
+                  setLastRemoving(item)
+                  setRemoving(item)
+                }} />
             </li>
           ))}
         </ul>
@@ -83,8 +87,8 @@ export default function Whitelist() {
         }}
       >
         <p>
-          {removing?.name} will be removed from your list.
-          {removing?.patchTest.status === 'failed'
+          {lastRemoving?.name} will be removed from your list.
+          {lastRemoving?.patchTest.status === 'failed'
             ? ' This also deletes the record of your reaction, so the product would no longer be excluded.'
             : ''}
         </p>

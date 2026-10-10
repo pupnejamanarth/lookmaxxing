@@ -1,21 +1,15 @@
 import { useState } from 'react'
 import { db, store } from '../../store'
-import { BackupError, exportBackup, validatePassphrase } from '../../store/backup'
+import { type BackupSummary, BackupError, exportBackup, validatePassphrase } from '../../store/backup'
 import { Banner, Button, Card, Checkbox, Field, formatDateTime, useLive } from '../../ui'
 import { backupErrorMessage, isShareCancel } from './helpers'
 import PassphraseField from './PassphraseField'
 
-async function deliver(blob: Blob, filename: string): Promise<'shared' | 'downloaded' | 'cancelled'> {
-  const file = new File([blob], filename, { type: 'application/octet-stream' })
-  if (typeof navigator.canShare === 'function' && typeof navigator.share === 'function' && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: filename })
-      return 'shared'
-    } catch (error) {
-      if (isShareCancel(error)) return 'cancelled'
-      // Share failed for another reason: fall through to a plain download.
-    }
-  }
+function canShareFile(file: File): boolean {
+  return typeof navigator.canShare === 'function' && typeof navigator.share === 'function' && navigator.canShare({ files: [file] })
+}
+
+function download(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -24,7 +18,23 @@ async function deliver(blob: Blob, filename: string): Promise<'shared' | 'downlo
   link.click()
   link.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
-  return 'downloaded'
+}
+
+/** Returns false when the log entries could not be written. The file itself is already delivered. */
+async function bookkeep(filename: string, summary: BackupSummary): Promise<boolean> {
+  try {
+    await db.kv.put({ key: 'lastBackupAt', value: Date.now() })
+    const rows = Object.values(summary.tables).reduce((a, b) => a + b, 0)
+    await store.appendAudit('backup_exported', `Backup ${filename}: ${rows} records, ${summary.blobCount} files`)
+    return true
+  } catch {
+    return false
+  }
+}
+
+interface Pending {
+  file: File
+  summary: BackupSummary
 }
 
 export default function BackupCard() {
@@ -34,6 +44,8 @@ export default function BackupCard() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
+  const [pending, setPending] = useState<Pending | null>(null)
+  const [sharing, setSharing] = useState(false)
   const last = useLive(async () => {
     const row = await db.kv.get('lastBackupAt')
     return typeof row?.value === 'number' ? row.value : null
@@ -43,29 +55,55 @@ export default function BackupCard() {
   const mismatch = confirm.length > 0 && confirm !== pass
   const ready = check.ok && confirm === pass && !busy
 
+  const finish = async (filename: string, summary: BackupSummary, message: string) => {
+    const logged = await bookkeep(filename, summary)
+    setDone(logged ? message : 'Backup saved, but the log entry could not be written.')
+    setPending(null)
+    setPass('')
+    setConfirm('')
+  }
+
   const run = async () => {
     setBusy(true)
     setError(null)
     setDone(null)
+    setPending(null)
     try {
       const { blob, filename, summary } = await exportBackup(pass)
-      const how = await deliver(blob, filename)
-      if (how === 'cancelled') {
-        setError('Sharing was cancelled. No backup was saved.')
-        return
+      const file = new File([blob], filename, { type: 'application/octet-stream' })
+      if (canShareFile(file)) {
+        // The slow key derivation used up the tap, so sharing needs a fresh one.
+        setPending({ file, summary })
+        setPass('')
+        setConfirm('')
+      } else {
+        download(blob, filename)
+        await finish(filename, summary, 'Backup downloaded. Check your Downloads folder.')
       }
-      const now = Date.now()
-      await db.kv.put({ key: 'lastBackupAt', value: now })
-      const rows = Object.values(summary.tables).reduce((a, b) => a + b, 0)
-      await store.appendAudit('backup_exported', `Backup ${filename}: ${rows} records, ${summary.blobCount} files`)
-      setDone(how === 'shared' ? 'Backup handed to the share sheet.' : 'Backup downloaded. Check your Downloads folder.')
-      setPass('')
-      setConfirm('')
     } catch (e) {
       setError(e instanceof BackupError ? backupErrorMessage(e) : 'The backup could not be made. Nothing was saved.')
     } finally {
       setBusy(false)
     }
+  }
+
+  const share = async () => {
+    if (!pending) return
+    setSharing(true)
+    setError(null)
+    try {
+      await navigator.share({ files: [pending.file], title: pending.file.name })
+    } catch (e) {
+      setSharing(false)
+      setError(
+        isShareCancel(e)
+          ? 'Sharing was cancelled. The backup is still ready to share.'
+          : 'Sharing failed. The backup is still ready to share.',
+      )
+      return
+    }
+    setSharing(false)
+    await finish(pending.file.name, pending.summary, 'Backup handed to the share sheet.')
   }
 
   return (
@@ -109,14 +147,27 @@ export default function BackupCard() {
             {error}
           </Banner>
         ) : null}
+        {pending ? (
+          <Banner tone="info" title="Backup is ready">
+            The file is encrypted. Share it to save it. Choose Save to Files, in a folder that is not synced.
+          </Banner>
+        ) : null}
         {done ? (
           <Banner tone="info" live>
             {done}
           </Banner>
         ) : null}
-        <Button type="submit" variant="primary" icon="download" loading={busy} disabled={!ready && !busy} fullWidth>
-          {busy ? 'Encrypting' : 'Export encrypted backup'}
+        {pending ? (
+          <Button variant="primary" icon="upload" loading={sharing} onClick={() => void share()} fullWidth>
+            Share backup file
+          </Button>
+        ) : null}
+        <Button type="submit" variant={pending ? 'secondary' : 'primary'} icon="download" loading={busy} disabled={!ready && !busy} fullWidth>
+          {busy ? 'Encrypting' : pending ? 'Make another backup' : 'Export encrypted backup'}
         </Button>
+        {!ready && !busy ? (
+          <p className="u-small u-dim">Enter and repeat a passphrase of at least 12 characters to enable export.</p>
+        ) : null}
       </form>
     </Card>
   )

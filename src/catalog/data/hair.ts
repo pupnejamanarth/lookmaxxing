@@ -8,8 +8,10 @@
  *    opened. Search digests were used only to cross-check bibliographic details and to avoid wrong claims, and
  *    each verificationNote says what the digest reported. A URL is given only where it appeared in a search result.
  *  - Numeric bands and scoring points are app-chosen grades and tolerances, not measured effect sizes. Each says so.
- *  - Weight changes against the v0 draft (still sums to 14): H04 4.0→3.5, H05 1.0→0, H08 0.5→0 (freed 2.0);
- *    H01 3.0→3.75, H09 new 0.75, H10 new 0.5 (used 2.0). H02 2, H03 1, H06 1.5, H07 1 unchanged.
+ *  - Weight changes against the v0 draft (still sums to 14): H04 4.0→3.0, H05 1.0→0, H08 0.5→0, H06 1.5→1.0,
+ *    H01 3.0→3.25, H02 2.0→2.75, H09 new 1.0, H10 new 1.0. H03 1 and H07 1 unchanged. The H01/H02 raise rests only on the
+ *    consistent self-reported burden of visible hair loss (13-study review), not on prevalence or on budget freed elsewhere;
+ *    no photo-based rating study of thinning was found.
  *  - No search found a peer-reviewed test of face-shape→haircut rules, so H04 is graded CONVENTION and says so.
  *  - Genetic hair loss is not reversible with food or habits. H01 and H02 therefore carry no action-plan drivers.
  */
@@ -86,12 +88,12 @@ export const metrics: Metric[] = [
     changeability: 'SURGICAL_ONLY',
     changeabilityNote:
       'Male-pattern hair loss is genetic and progressive. Nothing in food, sleep, training or scalp care is established to bring a receded hairline back or to stop it. A haircut changes how much the recession shows (scored in H04) but not the hairline itself. Hair transplant surgery is the only non-medical way to restore a hairline and is outside this app’s plan. Medical treatments exist and are a decision for a doctor.',
-    weight: 3.75,
+    weight: 3.25,
     weightRationale:
-      'Largest hair weight, raised from the draft’s 3.0. Visible hair loss has the most consistent support among the hair features (rating studies and wellbeing studies agree in direction) and is common: roughly half of white men show it by age 50. The extra 0.75 is part of the 2.0 freed by downgrading H04 (−0.5), H05 (−1.0) and H08 (−0.5).',
+      'Largest hair weight, 3.25 against the draft’s 3.0. The weight rests only on the evidence: self-report studies and a systematic review consistently find that hair loss is a significant psychological burden for men. It is not justified by how common hair loss is, nor by weight freed from other metrics. The effect of visible hair loss on how others rate appearance is weakly supported (one text-description experiment, no photo-based study found), which is why the weight is not higher.',
     evidence: 'MODERATE',
     evidenceNote:
-      'Men with hair loss report worse body image, and the one rating study found that tested thinning directly rated men with thinning hair lowest on most traits. These are few, small studies with young Western raters, and the 1996 beard-and-baldness study is reported inconsistently, so the size of the effect on attractiveness is uncertain.',
+      'MODERATE applies only to the men’s own reported distress and body image (Cash 1992 and a 13-study review measure the man’s own feelings, not how others rate him). For the effect on how others see him the evidence is WEAK: the thinning result in Mannes (2013) came from a text-description experiment (profiles reading “thinning brown hair”, “thick brown hair” or “shaved head”), not from photos or real hairlines. No photo-based rating study of thinning was found, and the 1996 beard-and-baldness study is reported inconsistently, so the size of the effect on attractiveness is uncertain.',
     sourceIds: [
       'hair:norwood1975',
       'hair:ellis2002',
@@ -157,12 +159,12 @@ export const metrics: Metric[] = [
     changeability: 'FIXED',
     changeabilityNote:
       'Pattern thinning is genetic and progressive, and no food, sleep, training or scalp habit is established to reverse it. Two non-genetic causes exist and are handled elsewhere: breakage and tight styling (H03), and temporary shedding after crash dieting or illness (H15).',
-    weight: 2,
+    weight: 2.75,
     weightRationale:
-      'Third-largest hair weight, unchanged from the draft. Held below H01 and H04 because the photo estimate depends on lighting and the score rests on a self-assessed grade.',
+      'Raised from the draft’s 2.0 to 2.75. The weight rests on the same evidence as H01: the self-reported burden of visible thinning, not on weight freed elsewhere. Held below H01 because the photo estimate depends on lighting and the score rests on a self-assessed grade, and because no photo-based rating study of thinning was found.',
     evidence: 'MODERATE',
     evidenceNote:
-      'The impact of visibly thin hair is supported by one rating study and by wellbeing studies, but few studies exist. The photo measurement is lighting-dependent, so the app scores a grade and uses the percentage only to track change.',
+      'MODERATE only for the self-reported psychological burden of visible thinning. For how others rate thin hair the evidence is WEAK: the one rating result (Mannes 2013) came from text-only profiles, not photos. The photo measurement is lighting-dependent, so the app scores a grade and uses the percentage only to track change.',
     sourceIds: ['hair:mannes2013', 'hair:cash1992', 'hair:aukerman2023', 'hair:ellis2002', 'hair:pirastu2017'],
     drivers: [],
     captureRequirements: ['crown_top', 'hair_natural'],
@@ -239,7 +241,7 @@ export const metrics: Metric[] = [
     measures:
       'Whether the current cut and styling work with the user’s own hairline, hair density, texture and face outline. It is a checklist of cut rules, not a beauty rating.',
     howMeasured:
-      'Checklist the user answers from the front, side and top photos with example images for each item. The app pre-fills items it can compute (hair clear of the brows, left-right balance of the outline) and the user confirms. Face-shape items use a rough face-shape class from the frontal photo outline. Ratings by trusted people are planned for V3. Refused when the hair is wet, flattened by a hat, or not in its normal daily style.',
+      'Checklist the user answers from the front, side and top photos with example images for each item. The app pre-fills items it can compute (hair clear of the brows, left-right balance of the outline) and the user confirms. The face-shape class is approximate: it comes from the frontal photo outline, which lens distortion, hair or beard over the outline, head pose and jaw shadow can all change. The face_balance item is therefore confirmed by the user only and is never passed automatically. Ratings by trusted people are planned for V3. Refused when the hair is wet, flattened by a hat, or not in its normal daily style, or when the face outline is hidden.',
     methods: ['CHECKLIST', 'AUTO_FRONTAL_PHOTO'],
     scale: {
       unit: '%',
@@ -282,7 +284,7 @@ export const metrics: Metric[] = [
         {
           id: 'face_balance',
           label:
-            'The outline balances the face shape (stylist convention): added height for a round or wide face, less height for a long face',
+            'User-confirmed only, never auto-passed. The outline balances the face shape (stylist convention, approximate class): added height for a round or wide face, less height for a long face',
           critical: false,
         },
         {
@@ -300,9 +302,9 @@ export const metrics: Metric[] = [
     changeability: 'CHANGEABLE',
     changeabilityNote:
       'The cut and styling are fully controllable. The hairline, density and texture the cut has to work with are not (H01, H02, H11).',
-    weight: 3.5,
+    weight: 3,
     weightRationale:
-      'Second-largest hair weight, cut from the draft’s 4.0 because the face-shape rules are convention and untested. It stays large because the haircut is the main non-medical lever on how hair reads, and the premise that hair changes how a face is perceived is supported.',
+      'Second-largest hair weight, cut from the draft’s 4.0 to 3.0 because the face-shape rules are convention and untested. Only one of seven items (face_balance) is a face-shape rule; the others (eyes clear, clean outline, no cover-up, length for density, deliberate finish) are universal grooming items. The weight stays moderate because the haircut is the main non-medical lever on how hair reads, but the support is the recognition study of Toseeb (2012), not an attractiveness study, and the item rules are untested convention.',
     evidence: 'CONVENTION',
     evidenceNote:
       'The rules are stylist and barber convention. No study found tests whether matching a cut to face shape changes ratings, although it is well supported that hair changes how a face is read.',
@@ -315,6 +317,8 @@ export const metrics: Metric[] = [
       'hair not in its normal daily style',
       'cut grown out past its normal interval (maintenance is scored in G01)',
       'head yaw or roll above 3° on the frontal photo',
+      'face outline hidden by hair or beard (face-shape class not usable)',
+      'estimated camera distance under 1.2 m (wide-angle distortion changes the outline)',
     ],
     phase: 'M2',
   },
@@ -352,7 +356,7 @@ export const metrics: Metric[] = [
       'Beard growth follows genetics and hormone sensitivity. No food, training or grooming habit changes it. Style and lines on top of it are controllable (H06).',
     weight: 0,
     weightRationale:
-      'Context only. The draft gave this 1.0, but no study found tests whether denser facial hair is rated higher. The freed 1.0 moved to H01, H09 and H10, which have stronger or more directly relevant evidence.',
+      'Context only. The draft gave this 1.0, but no study found tests whether denser facial hair is rated higher. The freed 1.0 was reallocated to H01, H02, H09 and H10.',
     evidence: 'WEAK',
     evidenceNote:
       'Studies compare shaved, stubble and beard states. None tested whether denser growth is rated higher, so density is treated as a fact that shapes the style choice, not as a score.',
@@ -424,9 +428,9 @@ export const metrics: Metric[] = [
     changeability: 'CHANGEABLE',
     changeabilityNote:
       'Style, length and lines are fully controllable. The growth pattern under them is not (H05).',
-    weight: 1.5,
+    weight: 1,
     weightRationale:
-      'Unchanged from the draft. Facial hair upkeep is visible and changeable, and rating studies show facial hair state moves ratings. The studies are small, so the metric is graded as convention and its items are upkeep rules, not a claimed ideal.',
+      'Cut from the draft’s 1.5 to 1.0 because the evidence is convention. Facial hair upkeep is visible and changeable, and rating studies show facial hair state moves ratings. The studies are small, so the metric is graded as convention and its items are upkeep rules, not a claimed ideal.',
     evidence: 'CONVENTION',
     evidenceNote:
       'Small rating studies show that the level of facial hair changes how men are rated, but they disagree about which level is best and do not test line rules. The checklist items are barber convention.',
@@ -543,7 +547,7 @@ export const metrics: Metric[] = [
     changeabilityNote: 'Brow fullness is mostly genetic. Growing out trimmed or plucked brows is a grooming matter covered in H07.',
     weight: 0,
     weightRationale:
-      'Context only. The draft gave this 0.5, but the direction of the effect for men could not be confirmed, so there is no defensible scoring rule. The freed 0.5 moved to H01, H09 and H10.',
+      'Context only. The draft gave this 0.5, but the direction of the effect for men could not be confirmed, so there is no defensible scoring rule. The freed 0.5 was reallocated to H01, H02, H09 and H10.',
     evidence: 'WEAK',
     evidenceNote:
       'One rating study included brow thickness, but its direction for men could not be confirmed from the material available. Brow fullness is recorded for context, not scored.',
@@ -599,9 +603,9 @@ export const metrics: Metric[] = [
     changeability: 'CHANGEABLE',
     changeabilityNote:
       'Flaking comes and goes. A steady wash routine and gentle scalp handling can reduce it. If it persists, a doctor or pharmacist can say whether it is dandruff or another skin condition. This app does not recommend products or ingredients; a product the user already owns is the only product lever it considers.',
-    weight: 0.75,
+    weight: 1,
     weightRationale:
-      'New metric, kept below the 1.0 cap for WEAK evidence. Its weight comes from the 2.0 freed by downgrading H04, H05 and H08.',
+      'New metric, at the 1.0 cap for WEAK evidence. It is a visible, changeable grooming item; no rating study measures its effect, so the weight stays at the cap.',
     evidence: 'WEAK',
     evidenceNote:
       'Dandruff is very common, and reviews describe it as the mild end of a scalp skin condition. No rating study found measures how visible flakes change attractiveness, so the weight is small and rests on grooming convention.',
@@ -656,9 +660,9 @@ export const metrics: Metric[] = [
     changeability: 'FIXED',
     changeabilityNote:
       'Greying is driven mainly by age and genes. No food, sleep or training habit is established to reverse it. A haircut changes how much grey shows at the sides (H04).',
-    weight: 0.5,
+    weight: 1,
     weightRationale:
-      'New metric with a small weight for WEAK evidence (one experiment). Its weight comes from the 2.0 freed by downgrading H04, H05 and H08.',
+      'New metric at the 1.0 cap for WEAK evidence (one experiment that manipulated grey hair on the same faces, so the direction is clear and the size is modest).',
     evidence: 'WEAK',
     evidenceNote:
       'One 2025 experiment found grey hair made faces look older and somewhat less attractive, and lowered trust ratings in male faces only. Earlier work was mostly questionnaires, and one experiment does not settle the effect.',
@@ -738,9 +742,9 @@ export const metrics: Metric[] = [
         'No ideal. Strand width varies by person and ancestry; the app uses it to interpret scalp show and to pick cut rules.',
       male: null,
       rationale:
-        'Typical strand width is roughly 0.05 to 0.12 mm and differs between people and ancestry groups (from search digests of hair-biology studies, not opened). No rating study ranks strand widths.',
+        'Strand width varies between people and between ancestry groups. No rating study ranks strand widths, and no numeric range is given here because none was sourced.',
       confidenceInIdeal: 'low',
-      populationCaveat: 'Reported widths come from small samples in a few countries.',
+      populationCaveat: 'Strand width differs between ancestry groups, so the fine, medium and coarse labels are relative to the person’s own hair.',
     },
     scoring: { kind: 'none', reason: 'context_only' },
     changeability: 'FIXED',
@@ -888,9 +892,9 @@ export const metrics: Metric[] = [
     weight: 0,
     weightRationale:
       'Process and safety measure with no appearance weight: it raises a referral flag and context for H02 and does not score.',
-    evidence: 'MODERATE',
+    evidence: 'WEAK',
     evidenceNote:
-      'A review lists calorie restriction and starvation among triggers of temporary shedding, and doctors treat sudden patchy loss as needing assessment. Detecting a trend from phone photos is much weaker than those facts, which is why the app also asks about shedding.',
+      'WEAK for the measurement: detecting a trend from phone photos is untested, and the scale mixes scalp-show drift, hairline distance and self-reported shedding. Only the referral guidance is better supported (MODERATE): a review lists calorie restriction and starvation among triggers of temporary shedding, and doctors treat sudden patchy loss as needing assessment. The flag is driven by the user’s shedding report, not by photo percentages, which are context only.',
     sourceIds: ['hair:asghar2020', 'hair:ellis2002', 'hair:clinicalrule'],
     drivers: [],
     captureRequirements: ['crown_top', 'hairline_front', 'self_report'],
@@ -914,6 +918,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Norwood, O. T. (1975). Male pattern baldness: classification and incidence. Southern Medical Journal, 68(11), 1359–1365.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://pubmed.ncbi.nlm.nih.gov/1188424/',
     verified: false,
     verificationNote:
@@ -926,6 +931,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Ellis, J. A., Sinclair, R., & Harrap, S. B. (2002). Androgenetic alopecia: pathogenesis and potential for therapy. Expert Reviews in Molecular Medicine, 4(22), 1–11.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://pubmed.ncbi.nlm.nih.gov/14585162/',
     verified: false,
     verificationNote:
@@ -938,6 +944,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Pirastu, N., et al. (2017). GWAS for male-pattern baldness identifies 71 susceptibility loci explaining 38% of the risk. Nature Communications, 8, 1584.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://www.doi.org/10.1038/S41467-017-01490-8',
     verified: false,
     verificationNote:
@@ -950,12 +957,13 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Mannes, A. E. (2013; published online 2012). Shorn scalps and perceptions of male dominance. Social Psychological and Personality Science, 4(2), 198–205.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://journals.sagepub.com/doi/10.1177/1948550612449490',
     verified: false,
     verificationNote:
       NOFETCH +
-      ' A search digest of the abstract and press coverage reported three experiments: shaved heads were rated more dominant; digitally removing hair made men look more dominant, taller and stronger; men with thinning hair scored lowest on every trait except norm violation. Press coverage (not the abstract) said shaved men were rated older and less attractive. The page and volume numbers are from memory.',
-    supports: 'Men with thinning hair were rated lowest on most traits; a shaved head reads as more dominant but older',
+      ' A search digest of the abstract and press coverage reported three experiments: shaved heads were rated more dominant; digitally removing hair made men look more dominant, taller and stronger; men with thinning hair scored lowest on every trait except norm violation, but per the coverage that thinning result came from study 3, which used text-only profiles (“thinning brown hair” vs “thick brown hair” vs “shaved head”), not photos or real hairlines. Press coverage (not the abstract) said shaved men were rated older and less attractive. The page and volume numbers are from memory.',
+    supports: 'In a text-description experiment (not photos), profiles of men with thinning hair were rated lowest on most traits; shaved-head and hair-removal results came from photo experiments and read as more dominant, and press coverage says older',
   },
   {
     id: 'hair:muscarella1996',
@@ -973,6 +981,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Cash, T. F. (1992). The psychological effects of androgenetic alopecia in men. Journal of the American Academy of Dermatology, 26(6), 926–931.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://pubmed.ncbi.nlm.nih.gov/1607410/',
     verified: false,
     verificationNote:
@@ -985,6 +994,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Aukerman, E. L., & Jafferany, M. (2023). The psychological consequences of androgenetic alopecia: a systematic review. Journal of Cosmetic Dermatology, 22(1), 89–95.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://pubmed.ncbi.nlm.nih.gov/35403805/',
     verified: false,
     verificationNote:
@@ -997,6 +1007,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Toseeb, U., Keeble, D. R. T., & Bryant, E. J. (2012). The significance of hair for face recognition. PLoS ONE, 7(3), e34144.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3312903/',
     verified: false,
     verificationNote:
@@ -1009,6 +1020,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Nutt, Thorstenson, & Yorzinski (2025). Gray hair influences perceived age and social perceptions. Frontiers in Psychology, 16, 1541836.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC12094188/',
     verified: false,
     verificationNote:
@@ -1043,6 +1055,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Neave, N., & Shields, K. (2008). The effects of facial hair manipulation on female perceptions of attractiveness, masculinity, and dominance in male faces. Personality and Individual Differences, 45(5), 373–377.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://researchportal.northumbria.ac.uk/en/publications/the-effects-of-facial-hair-manipulation-on-female-perceptions-of-/',
     verified: false,
     verificationNote:
@@ -1055,6 +1068,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Janif, Z. J., Brooks, R. C., & Dixson, B. J. (2014). Negative frequency-dependent preferences and variation in male facial hair. Biology Letters, 10(4), 20130958.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4013690',
     verified: false,
     verificationNote:
@@ -1067,6 +1081,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Sadr, J., Jarudi, I., & Sinha, P. (2003). The role of eyebrows in face recognition. Perception, 32(3), 285–293.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://journals.sagepub.com/doi/10.1068/p5027',
     verified: false,
     verificationNote:
@@ -1079,6 +1094,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Mogilski, J. K., & Welling, L. L. M. (2018). The relative contribution of jawbone and cheekbone prominence, eyebrow thickness, eye size, and face length to evaluations of facial masculinity and attractiveness: a conjoint data-driven approach. Frontiers in Psychology, 9, 2428.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6290027/',
     verified: false,
     verificationNote:
@@ -1091,6 +1107,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Borda, L. J., & Wikramanayake, T. C. (2015). Seborrheic dermatitis and dandruff: a comprehensive review. Journal of Clinical and Investigative Dermatology, 3(2).',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4852869/',
     verified: false,
     verificationNote:
@@ -1103,6 +1120,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Asghar, F., et al. (2020). Telogen effluvium: a review of the literature. Cureus, 12(5), e8320.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7320655/',
     verified: false,
     verificationNote:
@@ -1115,6 +1133,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Billero, V., & Miteva, M. (2018). Traction alopecia: the root of the problem. Clinical, Cosmetic and Investigational Dermatology, 11, 149–159.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://www.doi.org/10.2147/CCID.S137296',
     verified: false,
     verificationNote:
@@ -1127,6 +1146,7 @@ export const sources: Source[] = [
     kind: 'peer_reviewed',
     citation:
       'Gavazzoni Dias, M. F. R. (2015). Hair cosmetics: an overview. International Journal of Trichology, 7(1), 2–15.',
+    // privacy-lint-allow(external-url): citation link shown as text, never fetched by the app
     url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4387693',
     verified: false,
     verificationNote:
@@ -1159,7 +1179,6 @@ export const sources: Source[] = [
     kind: 'community_claim',
     citation:
       'Hair-loss clinic and product web pages (several), for example Charles Medical Group, “Is scalp visibility a sign of balding”. Not peer-reviewed.',
-    url: 'https://charlesmedicalgroup.com/general/is-scalp-visibility-a-sign-of-balding-charles-medical-group-explains/',
     verified: false,
     verificationNote:
       'Seen only as a search digest, not opened. The digest said these pages describe dark hair on a pale scalp as showing more scalp, that lighting and wet hair affect how much scalp shows, and that scalp visibility alone does not prove hair loss. They are commercial pages and no peer-reviewed measurement was found.',

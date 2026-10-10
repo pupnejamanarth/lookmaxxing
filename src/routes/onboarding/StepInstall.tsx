@@ -98,7 +98,7 @@ export default function StepInstall({ save, next, back }: StepProps) {
             Back
           </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={notIphone} loading={busy} className="onb-quiet">
+        <Button variant="ghost" onClick={notIphone} loading={busy} className="onb-quiet">
           I am not on an iPhone
         </Button>
       </div>

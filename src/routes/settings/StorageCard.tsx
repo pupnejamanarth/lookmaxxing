@@ -29,7 +29,7 @@ export default function StorageCard() {
 
   const v = est.value
   return (
-    <Card title="Storage" icon="shield" headingLevel={2}>
+    <Card title="Storage" icon="list" headingLevel={2}>
       {!v ? (
         <Skeleton height="4rem" />
       ) : (

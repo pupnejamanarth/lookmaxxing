@@ -31,6 +31,9 @@ const COLOUR_REFUSALS: string[] = [
   'more than half of the measured patch covered by hair, beard shadow or a glasses frame',
 ]
 
+/** Colour refusals for glare-based metrics: the highlight-percentage rule is dropped because glare is the thing being measured. */
+const COLOUR_REFUSALS_NO_HIGHLIGHT: string[] = COLOUR_REFUSALS.filter((c) => !c.startsWith('blown-out highlights'))
+
 /** Extra condition for pigment metrics, where a fresh tan or sunburn changes the reading. */
 const FRESH_SUN = 'sunburn or fresh tan on the measured skin within the last 3 weeks'
 
@@ -85,12 +88,12 @@ export const metrics: Metric[] = [
     changeability: 'CHANGEABLE',
     changeabilityNote:
       'Mostly driven by hormones, oil-gland activity and genetics, which habits do not change. Habits can lower severity modestly and prevent marks and scars. Moderate to severe acne needs a doctor; the app never treats it.',
-    weight: 4.75,
+    weight: 4.25,
     weightRationale:
-      'Largest skin weight: acne is the most visible skin problem in rating studies and has the best-documented social cost. Raised from the seed’s 4.0 using weight freed from weaker-evidence skin metrics (colour, texture, pores, under-eye). Not higher because the habit levers available in the app are modest.',
+      'Largest skin weight, based on how common acne is, that it is the skin problem most likely to need medical care, and its lasting consequences (marks, scars). It does not rest on attractiveness evidence, which is a single survey of edited teenage photos. Not higher because the habit levers available in the app are modest.',
     evidence: 'MODERATE',
     evidenceNote:
-      'Acne clearly changes how faces are judged: the rating studies we found all point the same way, though they are surveys and the one we cite used teenage photos. The habit levers here have modest, mixed support. The only diet trial we cite had 43 young men over 12 weeks and could not separate diet from weight loss. Washing twice a day was no worse than other frequencies in one 6-week trial of men. Large effects come from medical treatment, which the app does not give.',
+      'We cite one rating study (Ritvo 2011): online surveys of digitally altered photos of teenagers with acne or clear skin, with self-report questions. It found acne faces judged less favourably, but one survey of edited teen photos is thin support for adult men. The habit levers here have modest, mixed support. The only diet trial we cite had 43 young men over 12 weeks and could not separate diet from weight loss. Washing twice a day was no worse than other frequencies in one 6-week trial of men. Large effects come from medical treatment, which the app does not give.',
     sourceIds: ['skin:ritvo2011', 'skin:fda2018acne', 'skin:reynolds2024', 'skin:smith2007', 'skin:choi2006'],
     drivers: ['skin_habits', 'nutrition_structure'],
     captureRequirements: ['skin_zones', 'frontal_neutral'],
@@ -145,9 +148,9 @@ export const metrics: Metric[] = [
     changeability: 'PROFESSIONAL_ONLY',
     changeabilityNote:
       'Established scars do not respond to habits. Treatment is done by dermatologists and is outside this app. The part within your control is preventing new scars: do not pick or squeeze spots, and get persistent acne seen early (S01).',
-    weight: 1.5,
+    weight: 2.75,
     weightRationale:
-      'Unchanged from the seed. Scars are permanent and visible, so they matter, but habits cannot reverse them, so they stay well below active acne.',
+      'Raised from the seed’s 1.5 using weight freed from S01 and S04. Scars are permanent and have clinical consequence, and scarring is common and linked to delayed treatment, so early referral matters. Habits cannot reverse them, so they stay below active acne.',
     evidence: 'MODERATE',
     evidenceNote:
       'Scarring is common among people treated for acne and is linked to acne severity, relapsing acne and delay before effective treatment; in one risk study, picking and squeezing were also linked to scarring. We found no study that isolates how scars change attractiveness ratings, and grading your own photos is unreliable. Treat the grade as a rough record.',
@@ -174,20 +177,20 @@ export const metrics: Metric[] = [
     measures:
       'Flat brown or red-pink marks left where spots healed, counted by how many stand out clearly from the skin around them. Pits and dents are scored in S02.',
     howMeasured:
-      'On grey-card-calibrated close-ups the user taps each mark. The app converts a patch on the mark and a patch 5 mm away to CIELAB colour and computes ΔE, the overall colour difference between the two. A mark counts as visible when ΔE is 3 or more. Brown marks show mainly as lower lightness (L*), red-pink marks as higher redness (a*). Scabs and open spots are excluded.',
+      'On grey-card-calibrated close-ups the user taps each mark. The app converts a patch on the mark and a patch 5 mm away to CIELAB colour and computes ΔE, the overall colour difference between the two. A mark counts as visible when ΔE is 4 or more, a deliberately conservative cut-off because phone-photo error is itself around 1 ΔE or more. Brown marks show mainly as lower lightness (L*), red-pink marks as higher redness (a*). Scabs and open spots are excluded.',
     methods: ['COLOR_CALIBRATED_PHOTO', 'TAP_COUNT_ON_PHOTO'],
     scale: {
-      unit: 'visible marks (count with ΔE ≥ 3)',
+      unit: 'visible marks (count with ΔE ≥ 4)',
       min: 0,
       max: null,
-      description: 'Number of marks whose colour differs from nearby skin by ΔE 3 or more',
+      description: 'Number of marks whose colour differs from nearby skin by ΔE 4 or more',
       higherIs: 'worse',
     },
     ideal: {
-      summary: 'No marks that stand out: zero marks at or above ΔE 3.',
+      summary: 'No marks that stand out: zero marks at or above ΔE 4.',
       male: null,
       rationale:
-        'A colour difference of about 2–3 ΔE is roughly the smallest that people notice between two flat colour patches, which is where the visibility cut-off of 3 comes from; it was not tested on faces. No study gives a normal or attractive number of marks, so no numeric band is set.',
+        'The ΔE 4 visibility cut-off is a convention, not tested on faces. Colour-difference thresholds quoted in the literature (about 2–3 ΔE) come from flat patches under controlled viewing, and camera distance and angle alone can cause errors above 1 ΔE, so the app uses a higher cut-off. Measurement error of about 1 ΔE or more applies to every reading. No study gives a normal or attractive number of marks, so no numeric band is set.',
       confidenceInIdeal: 'low',
       populationCaveat:
         'Post-inflammatory brown marks are more frequent in darker skin tones, and red-pink marks are harder to detect in them. The visibility cut-off was not tested across skin tones.',
@@ -208,8 +211,8 @@ export const metrics: Metric[] = [
       'Cut from the seed’s 1.5 and capped for WEAK evidence. These marks also overlap with S04 (tone evenness), so a higher weight would count the same colour irregularity twice. The freed weight went to S01.',
     evidence: 'WEAK',
     evidenceNote:
-      'No study isolates how post-acne marks change attractiveness. The support is indirect: studies of even skin colour (S04) and clinical reviews of how these marks form and fade. The ΔE 3 cut-off is a colour-science rule of thumb, not a measured limit for faces.',
-    sourceIds: ['skin:davis2010', 'skin:mahy1994', 'skin:fink2012'],
+      'No study isolates how post-acne marks change attractiveness. The support is indirect: studies of even skin colour (S04) and clinical reviews of how these marks form and fade. The ΔE 4 cut-off is a convention, not a measured limit for faces, and phone-photo measurement error (above 1 ΔE) is a real fraction of it.',
+    sourceIds: ['skin:davis2010', 'skin:fink2012', 'skin:croninangle'],
     drivers: ['skin_habits', 'sun_habits', 'whitelist_product'],
     captureRequirements: ['skin_zones'],
     refusalConditions: [
@@ -257,12 +260,12 @@ export const metrics: Metric[] = [
     changeability: 'CHANGEABLE',
     changeabilityNote:
       'Partly. Sun habits and not picking limit new uneven patches and let existing ones fade over months. The underlying pigment pattern and how visible blood vessels are come from genetics and do not change.',
-    weight: 2.5,
+    weight: 1.5,
     weightRationale:
-      'Kept at the seed value. It is the only skin-colour factor with a rating study on men’s faces and it captures overall blotchiness that no other skin metric covers. Not raised: one male study, white participants only, and a calibrated photo is required.',
+      'Cut from the seed’s 2.5. It is the only skin-colour factor with a rating study on men’s faces, but that is a single study of 160 white British men rating cheek crops, the metric has no absolute ideal, needs a grey card, and overlaps S03 and S16 (colour irregularity would be double-counted). The freed weight went to S02 and S11.',
     evidence: 'MODERATE',
     evidenceNote:
-      'Several rating studies, including one on men, link even skin colour with looking younger, healthier and more attractive. Most come from the same research network, one reported industry funding, and they rate cheek photos, not whole-face attractiveness. How much this changes how people treat you in real life is unknown.',
+      'Several rating studies, including one on men, link even skin colour with looking younger, healthier and more attractive. All of this rating evidence comes from one research network (Fink, Matts and colleagues); one study reported industry funding and another has industry co-authors. The only male study is 160 white British men, and the studies rate cheek photos, not whole-face attractiveness. How much this changes how people treat you in real life is unknown.',
     sourceIds: ['skin:fink2001', 'skin:matts2007', 'skin:fink2012', 'skin:samson2010', 'skin:nkengne2008', 'skin:croninangle'],
     drivers: ['sun_habits', 'skin_habits'],
     captureRequirements: ['skin_zones', 'frontal_neutral'],
@@ -524,7 +527,7 @@ export const metrics: Metric[] = [
     name: 'Oiliness and shine',
     measures: 'How shiny the forehead and nose look at a fixed time after washing, a sign of surface oil.',
     howMeasured:
-      'Grey-card-calibrated frontal photo taken 3 hours after washing, in the same soft light each time. The app reports the share of the forehead-and-nose patch covered by glare (very bright, low-colour pixels). Optional: press blotting paper on the nose and self-grade the oil mark 0–3.',
+      'Grey-card-calibrated frontal photo taken 3 hours after washing, in the same soft light each time. The app reads linear pixel values from a raw or minimally processed file and reports the share of the forehead-and-nose patch covered by glare, defined as pixels above 90% of the sensor maximum (but not clipped) with low colour saturation. Clipping outside the patch is checked to confirm exposure is sound. The 3-hour rule fixes timing only, not oil state, so the optional blotting-paper grade is shown beside it. Optional: press blotting paper on the nose and self-grade the oil mark 0–3.',
     methods: ['COLOR_CALIBRATED_PHOTO', 'SELF_GRADE_REFERENCE'],
     scale: {
       unit: '% of forehead and nose patch with glare',
@@ -559,7 +562,9 @@ export const metrics: Metric[] = [
     drivers: [],
     captureRequirements: ['skin_zones', 'frontal_neutral'],
     refusalConditions: [
-      ...COLOUR_REFUSALS,
+      ...COLOUR_REFUSALS_NO_HIGHLIGHT,
+      'clipped (maximum-brightness) pixels covering more than 2% of the face outside the forehead-and-nose patch (the scene is over-exposed, so glare cannot be separated from exposure error)',
+      'file is not raw or minimally processed (glare is read in linear values; HDR, tone-mapping or heavy JPEG processing active)',
       'photo not taken 3 hours (plus or minus 15 minutes) after washing',
       'face wiped or blotted within the last 15 minutes',
       'light direction differs from the baseline scan set-up',
@@ -602,9 +607,9 @@ export const metrics: Metric[] = [
     changeability: 'CHANGEABLE',
     changeabilityNote:
       'Prevention only: limiting UV exposure slows new lines, and smoking is tracked as a habit in X10. Lines already formed need professional treatment, which the app does not advise on. A UV-protection product the user already owns can be whitelisted; the app does not recommend products.',
-    weight: 0.75,
+    weight: 1.0,
     weightRationale:
-      'Raised from the seed’s 0.5: wrinkles are a main skin cue for perceived age, and sun exposure is controllable. Kept low because lines are usually mild in men in their 20s and 30s and the attractiveness effect in men is not well studied.',
+      'Raised from the seed’s 0.5 (0.75 before the last review pass): wrinkles are a main skin cue for perceived age, and sun exposure is controllable. Kept low because lines are usually mild in men in their 20s and 30s and the attractiveness effect in men is not well studied.',
     evidence: 'MODERATE',
     evidenceNote:
       'Wrinkles clearly shape perceived age, and sun and smoking are linked to more of them. But the key studies are observational (twins, sun-seeking versus sun-avoiding groups) or rated women’s faces, and we found no study of how lines change attractiveness in men.',
@@ -762,13 +767,13 @@ export const metrics: Metric[] = [
     },
     changeability: 'CHANGEABLE',
     changeabilityNote:
-      'Cold, dry air lowers skin barrier function in a review, and hot water is a suspected contributor with limited evidence. The habit levers are lukewarm water, shorter showers, patting dry and not scrubbing. Dryness caused by a skin condition does not respond to habits.',
+      'Cold, dry air lowers skin barrier function in a review. Gentle washing habits (lukewarm water, short showers, patting dry, not scrubbing) are common dermatology guidance, but neither cited source was shown to state them and there is no trial support here. Dryness caused by a skin condition does not respond to habits.',
     weight: 0.5,
     weightRationale:
       'New metric. Visible flaking is a common, controllable problem that none of the other skin metrics capture, but it has no attractiveness research behind it, so it stays small.',
     evidence: 'WEAK',
     evidenceNote:
-      'Dry skin and its triggers (cold, low humidity) are described in dermatology reviews, but we found no study of how flaking changes attractiveness ratings, and the habit advice has limited trial support. Included at a low weight.',
+      'Dry skin and its triggers (cold, low humidity) are described in dermatology reviews, but we found no study of how flaking changes attractiveness ratings, and the habit advice is common guidance without cited trial support. Included at a low weight.',
     sourceIds: ['skin:augustin2019', 'skin:engebretsen2016'],
     drivers: ['skin_habits'],
     captureRequirements: ['skin_zones', 'skin_sidelight'],
@@ -848,13 +853,13 @@ export const metrics: Metric[] = [
     measures:
       'Flat brown spots on the face and neck from past sun exposure (sun spots, also called solar lentigines) and patchy tan lines, counted separately from post-acne marks (S03). Freckles are flagged because they are mostly inherited.',
     howMeasured:
-      'On grey-card-calibrated close-ups of the cheeks, forehead, temples and neck the user taps each flat brown spot. The app keeps those with ΔE (overall colour difference) of 3 or more against the skin around them and reports the count. Tan lines from clothing are logged but not counted.',
+      'On grey-card-calibrated close-ups of the cheeks, forehead, temples and neck the user taps each flat brown spot. The app keeps those with ΔE (overall colour difference) of 4 or more against the skin around them and reports the count. The ΔE 4 cut-off is a convention, not tested on faces, and phone-photo error of about 1 ΔE or more applies; raw files are preferred. Tan lines from clothing are logged but not counted.',
     methods: ['COLOR_CALIBRATED_PHOTO', 'TAP_COUNT_ON_PHOTO'],
     scale: {
-      unit: 'visible brown spots (count with ΔE ≥ 3)',
+      unit: 'visible brown spots (count with ΔE ≥ 4)',
       min: 0,
       max: null,
-      description: 'Number of flat brown spots whose colour differs from nearby skin by ΔE 3 or more',
+      description: 'Number of flat brown spots whose colour differs from nearby skin by ΔE 4 or more',
       higherIs: 'worse',
     },
     ideal: {
@@ -1102,17 +1107,6 @@ export const sources: Source[] = [
       NOT_OPENED +
       'A search summary of the abstract said post-inflammatory hyperpigmentation is an acquired excess of pigment after inflammation or injury, occurs in all skin types, is more frequent in skin of colour, and that first-line management includes photoprotection. The full text, including how long marks last and how sun affects them, was not read.',
     supports: 'Post-inflammatory marks follow skin inflammation, are more frequent in darker skin, and photoprotection is part of management',
-  },
-  {
-    id: 'skin:mahy1994',
-    kind: 'peer_reviewed',
-    citation:
-      'Mahy, M., Van Eycken, L., & Oosterlinck, A. (1994). Evaluation of uniform color spaces developed after the adoption of CIELAB and CIELUV. Color Research and Application, 19(2), 105–121.',
-    verified: false,
-    verificationNote:
-      NOT_OPENED +
-      'The citation is known only from a patent document and software documentation that attribute a just-noticeable CIELAB difference of ΔE 2.3 to this paper; the paper itself was not found. The 2.3 value applies to flat colour patches in controlled viewing, not to faces. No URL is given because none was surfaced for the original.',
-    supports: 'A colour difference of about 2–3 ΔE is near the smallest difference people notice between flat colour patches',
   },
   {
     id: 'skin:fink2001',

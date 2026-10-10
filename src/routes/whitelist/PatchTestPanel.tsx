@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { store } from '../../store'
 import type { PatchTestResult, WhitelistItem } from '../../types'
 import { Button, ConfirmDialog, Field, Select, TextInput, formatDateTime, plural } from '../../ui'
-import { PATCH_TEST_DAYS, RESULT_LABEL, canMarkPassed, describeError, hasReaction, patchDaysRemaining, patchSite } from './helpers'
+import { PATCH_TEST_DAYS, RESULT_LABEL, canMarkPassed, describeError, hasIrritationHold, hasReaction, patchDaysRemaining, patchSite } from './helpers'
 
 const RESULT_OPTIONS: { value: PatchTestResult; label: string }[] = [
   { value: 'no_reaction', label: RESULT_LABEL.no_reaction },
@@ -100,7 +100,16 @@ export function PatchTestPanel({ item, now }: { item: WhitelistItem; now: number
         {item.patchTest.startedAt !== null ? `Started ${formatDateTime(item.patchTest.startedAt)}. ` : ''}
         {left === 0 ? 'The 7 days are done.' : `${left} ${plural(left, 'day')} remaining.`}
       </p>
-      <Protocol site={site} />
+      <details className="wl-patch__how">
+        <summary>How to do the test</summary>
+        <Protocol site={site} />
+      </details>
+      {hasIrritationHold(item) ? (
+        <p className="wl-error" role="status">
+          Mild irritation is a stop sign. Stop using it. Mark passed stays locked until a later entry reads no reaction. If it
+          comes back, log a reaction.
+        </p>
+      ) : null}
       {entries.length > 0 ? <LogList entries={entries} /> : null}
 
       {logging ? (
@@ -133,7 +142,7 @@ export function PatchTestPanel({ item, now }: { item: WhitelistItem; now: number
         </div>
       )}
       {!canPass && !logging ? (
-        <p className="u-dim u-small">Mark passed unlocks after {PATCH_TEST_DAYS} days with no reaction.</p>
+        <p className="u-dim u-small">Mark passed unlocks after {PATCH_TEST_DAYS} days with no reaction and no open irritation.</p>
       ) : null}
       {error ? (
         <p className="wl-error" role="alert">
@@ -148,8 +157,12 @@ export function PatchTestPanel({ item, now }: { item: WhitelistItem; now: number
         confirmLabel="Log reaction"
         onCancel={() => setConfirmReaction(false)}
         onConfirm={async () => {
-          await store.logPatchTest(item.id, 'reaction', note)
           setConfirmReaction(false)
+          try {
+            await store.logPatchTest(item.id, 'reaction', note)
+          } catch (e) {
+            setError(describeError(e))
+          }
           setLogging(false)
         }}
       >

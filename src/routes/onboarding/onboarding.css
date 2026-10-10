@@ -31,6 +31,9 @@
 
 .onb-quiet {
   align-self: center;
+  min-height: var(--tap);
+  color: var(--dim);
+  text-decoration: underline;
 }
 
 .onb-checks {

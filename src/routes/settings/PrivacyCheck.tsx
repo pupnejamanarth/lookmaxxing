@@ -17,7 +17,18 @@ export default function PrivacyCheck() {
   const [state, setState] = useState(snapshot)
 
   useEffect(() => {
-    const refresh = () => setState(snapshot())
+    const refresh = () =>
+      setState((prev) => {
+        const next = snapshot()
+        const same =
+          prev.stats.blockedCount === next.stats.blockedCount &&
+          prev.stats.installed === next.stats.installed &&
+          prev.audit.origins.length === next.audit.origins.length &&
+          prev.audit.external.length === next.audit.external.length &&
+          prev.audit.cspBlocked.length === next.audit.cspBlocked.length &&
+          prev.csp === next.csp
+        return same ? prev : next
+      })
     window.addEventListener(NET_BLOCKED_EVENT, refresh)
     const timer = window.setInterval(refresh, 3000)
     return () => {

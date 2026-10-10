@@ -8,6 +8,7 @@
  *  - Numeric bands are labelled as one of: a published clinical convention, a typical-range assumption,
  *    or an app-chosen tolerance. None is a measured perceptual limit. Replace them when verified norm
  *    tables are added.
+ *  - Page fetch still failed (DNS) on re-check 2026-10-10, so every source stays verified:false. Priority to verify when fetch works: coetzee2009, coetzee2010, rerule2016, ellenbogen1980, rhodes2006.
  *  - Overlaps are stated where they exist (F01 uses cheek-to-jaw width, so F17 is not scored again).
  */
 import type { Metric, Source } from '../schema'
@@ -64,7 +65,7 @@ export const metrics: Metric[] = [
     },
     ideal: {
       summary:
-        'Lean enough that the jaw and cheek edges show, but not gaunt. In rating studies, men’s faces are judged best at the lower end of a healthy weight, and faces at both extremes of weight are rated lower.',
+        'Lean enough that the jaw and cheek edges show. Rating studies link heavier-looking faces to lower rated health and attractiveness. We found no source on gaunt faces, so no claim is made about being too lean.',
       male: null,
       rationale:
         'The index is relative, so no absolute band exists. Rating studies find a noticeable change at about 1.3 BMI points of face weight, and about 2.6 BMI points of loss before men’s faces in edited photos were judged more attractive (Re & Rule 2016).',
@@ -75,17 +76,17 @@ export const metrics: Metric[] = [
     scoring: {
       kind: 'personal_baseline',
       direction: 'target_range',
-      note: 'No absolute ideal exists for this index. The score is closeness to your personal target index, set as the value measured at the body fat chosen in B02. Until a target exists, the first scan is the baseline and the score is shown as “baseline set”. The score falls again if the face reads as gaunt (index well below target).',
+      note: 'No absolute ideal exists for this index. The score is closeness to your personal target index, set as the value measured at the body fat chosen in B02. The score cannot be computed until B02 sets a target; until then the first scan is the baseline and the score is shown as “baseline set”. There is no separate gaunt-face penalty because no source supports one.',
     },
     changeability: 'CHANGEABLE',
     changeabilityNote:
       'Face fat follows overall body fat, but where fat comes off first differs between people. Bone structure is fixed.',
-    weight: 8.5,
+    weight: 8,
     weightRationale:
-      'Largest face weight. It is the face feature with the most consistent rating-study support and the one that real habits change. It also receives the weight freed by downgrading weaker face metrics (F02–F30), so the category total stays at 22.',
+      'Largest face weight: the face feature with the most consistent rating-study support, and habits change it. Trimmed from 8.5 because the composite index is not validated as a whole (see evidenceNote) and the index depends on bone structure.',
     evidence: 'MODERATE',
     evidenceNote:
-      'Several rating studies link a heavier-looking face to lower rated health and attractiveness, and face shape tracks BMI. Most of this work uses photo ratings by young adults, and the index here is an estimate from face shape, not a body-fat reading.',
+      'Several rating studies link a heavier-looking face to lower rated health and attractiveness, and face shape tracks BMI. Most of this work uses photo ratings by young adults, and some uses edited photos. The composite index used here (outline length to area plus cheek-to-jaw width) is NOT validated as a whole by any cited source: only its parts are cited (Coetzee 2010 relates the individual ratios to BMI). It is an estimate from face shape, not a body-fat reading.',
     sourceIds: ['face:coetzee2009', 'face:coetzee2010', 'face:rerule2016'],
     drivers: ['fat_loss', 'nutrition_structure', 'resistance_training', 'consistency'],
     captureRequirements: ['frontal_neutral'],
@@ -108,7 +109,7 @@ export const metrics: Metric[] = [
     howMeasured:
       'Manual: on a side-view photo you place three points (the underside of the chin, the corner where the chin meets the neck, and a point down the front of the neck). The app computes the angle. The head must be level, like looking at the horizon, because lowering the chin shrinks the angle and lifting it widens it, so head tilt changes the reading directly. ' +
       PHOTO_ERROR,
-    methods: ['MANUAL_LANDMARKS', 'AUTO_PROFILE_PHOTO'],
+    methods: ['MANUAL_LANDMARKS'],
     scale: { unit: '°', min: 80, max: 180, description: 'Angle at the chin-neck corner', higherIs: 'target_range' },
     ideal: {
       summary: '105–120° is the plastic-surgery standard for a youthful, defined neck.',
@@ -129,9 +130,9 @@ export const metrics: Metric[] = [
     changeability: 'CHANGEABLE',
     changeabilityNote:
       'Fat under the chin and head and neck posture change the angle. The jaw and neck anatomy underneath does not change.',
-    weight: 2,
+    weight: 1,
     weightRationale:
-      'The under-chin line is one of the most visible lower-face features that habits change, so it keeps a mid weight despite weak evidence for the exact band.',
+      'Cut from 2: the evidence is a 1980 surgical criterion only (CONVENTION, low confidence). Habits can change this area, but changeability alone does not earn weight.',
     evidence: 'CONVENTION',
     evidenceNote:
       'The 105–120° band is a plastic-surgery standard from 1980, not a tested attractiveness target. Fat under the chin and head position clearly change how this area looks.',
@@ -161,28 +162,21 @@ export const metrics: Metric[] = [
     scale: { unit: '°', min: 100, max: 150, description: 'Soft-tissue angle at the jaw corner', higherIs: 'target_range' },
     ideal: {
       summary:
-        'No evidence-based ideal. Adult X-ray measurements of the bone angle mostly sit near 119–127°, and the difference between men and women is inconsistent between studies. A lower angle is not “always better”.',
+        'No evidence-based ideal. No sourced norm is used here. A lower angle is not “always better”.',
       male: null,
       rationale:
-        'We found no rating study that isolates the jaw angle in men’s faces and shows a clear best value. Studies of jaw and profile shape are small or mostly use women’s faces. The scoring band is a typical range, not a preference.',
+        'We found no rating study that isolates the jaw angle in men’s faces and shows a clear best value. Studies of jaw and profile shape are small or mostly use women’s faces. The angle is shown for information and is not scored.',
       confidenceInIdeal: 'low',
       populationCaveat:
         'X-ray norms come from orthodontic patients in several countries; a soft-tissue angle from a photo is a different quantity.',
     },
-    scoring: {
-      kind: 'range',
-      lo: 118,
-      hi: 130,
-      tau: 8,
-      tauRationale:
-        'Typical-range band (bone norms plus allowance for soft tissue), not an ideal. Tau of 8° is close to the error of hand-placed points and avoids penalising normal variation.',
-    },
+    scoring: { kind: 'none', reason: 'context_only' },
     changeability: 'FIXED_BUT_VISIBILITY_CHANGEABLE',
     changeabilityNote:
       'The bone angle is fixed. Face fat and beard length change how sharp the outline looks in a photo.',
-    weight: 0.75,
+    weight: 0,
     weightRationale:
-      'Capped below 1 because the attractiveness evidence for any particular angle is weak and the photo measurement is not the bone angle.',
+      'Set to 0 (was 0.75): no cited norm supports the old 118–130° band, and the photo measurement is not the bone angle. Shown, not scored.',
     evidence: 'WEAK',
     evidenceNote:
       '“A lower gonial angle is always better” is lookmaxxing folklore. Studies of jaw shape and attractiveness are few and small, and the bone angle cannot be measured from a photo. Treat the number as descriptive.',
@@ -206,14 +200,14 @@ export const metrics: Metric[] = [
     measures:
       'How far the chin tip sits in front of or behind a vertical line dropped from the bridge of the nose, seen from the side.',
     howMeasured:
-      'Manual: on a level side-view photo you mark the bridge of the nose and the chin tip. The app draws a vertical line through the nose-bridge point, perpendicular to the level plane of the head, and reports the horizontal offset in mm, scaled from iris size (one study found a fixed iris reference about 3–4% off on average). Positive = chin in front of the line. ' +
+      'Manual: on a level side-view photo you mark the bridge of the nose and the chin tip. The app draws a vertical line through the nose-bridge point, perpendicular to the level plane of the head, and reports the horizontal offset as a percent of nose length (nose bridge to nose base) so no scale is needed. A profile photo cannot scale itself: in a true side view the iris is foreshortened and sits behind the lid, so the 3–4% iris-scaling error from frontal photos does not apply. If you supply a ruler or known-size reference in the same photo, or use your frontal IPD (F23), mm can be shown as an estimate. Positive = chin in front of the line. ' +
       PHOTO_ERROR,
-    methods: ['MANUAL_LANDMARKS', 'AUTO_PROFILE_PHOTO'],
-    scale: { unit: 'mm', min: -15, max: 15, description: 'Chin tip offset from the nose-bridge vertical (+ = forward)', higherIs: 'target_range' },
+    methods: ['MANUAL_LANDMARKS'],
+    scale: { unit: '% of nose length', min: -25, max: 25, description: 'Chin tip offset from the nose-bridge vertical, as a percent of nose length (+ = forward)', higherIs: 'target_range' },
     ideal: {
       summary:
         'Chin tip close to the vertical line from the nose bridge (the “zero meridian” used in profile surgery). In men, a straight profile was rated most appealing in a review of studies with lay raters.',
-      male: { lo: -2, hi: 2 },
+      male: { lo: -4, hi: 4 },
       rationale:
         'Surgical profile analysis puts the ideal chin on or just behind this line. A review of lay-rater studies found straight profiles most appealing in men but could not set firm cut-offs because the studies measured differently.',
       confidenceInIdeal: 'low',
@@ -222,18 +216,18 @@ export const metrics: Metric[] = [
     },
     scoring: {
       kind: 'range',
-      lo: -2,
-      hi: 2,
-      tau: 4,
+      lo: -4,
+      hi: 4,
+      tau: 8,
       tauRationale:
-        'Band follows the clinical line with ±2 mm for landmark and scale error. Published acceptability limits are inconsistent, so tau of 4 mm makes the score decline gradually instead of at a sharp edge.',
+        'Band follows the clinical line (on or near it) with allowance for landmark error, expressed as a percent of nose length because profile photos cannot be scaled to mm. The percent band is an app assumption, not a published figure. Published acceptability limits are inconsistent, so tau of 8 makes the score decline gradually instead of at a sharp edge.',
     },
     changeability: 'SURGICAL_ONLY',
     changeabilityNote:
       'Only surgery or implants change chin position. Fat under the chin changes how it looks (see F02) but not where the bone sits.',
-    weight: 1.5,
+    weight: 2.5,
     weightRationale:
-      'Profile chin position is a clearly visible feature and several rating studies agree that large departures lower appeal, but the exact limits are unsettled, so it stays at the seed weight.',
+      'Profile chin position is a clearly visible feature and rating studies (via a systematic review) agree that large departures lower appeal, but the exact limits are unsettled. Raised from 1.5 with weight freed from weaker metrics.',
     evidence: 'MODERATE',
     evidenceNote:
       'Rating studies agree that chins far behind or far in front of a straight profile lower rated appeal, but they disagree on the exact limits, and many use silhouettes or edited photos. Treat the band as approximate.',
@@ -275,9 +269,9 @@ export const metrics: Metric[] = [
     changeability: 'FIXED',
     changeabilityNote:
       'Bone and soft-tissue symmetry are fixed. Hair parting, head tilt and expression change how symmetric a photo looks.',
-    weight: 2.25,
+    weight: 5.75,
     weightRationale:
-      'The best-supported fixed trait in the face category, but the effect for natural faces is small and 2D photos add noise, so it receives only a moderate weight.',
+      'The best-supported fixed trait in the face category (a review across cultures). Raised from 2.25 with weight freed from weaker metrics; the effect for natural faces is small and 2D photos add noise, so this is a bookkeeping share, not a claim that symmetry matters this much.',
     evidence: 'MODERATE',
     evidenceNote:
       'Symmetric faces are rated as more attractive in many studies, but the effect for real, natural faces is small and the claim that symmetry signals health is disputed. Asymmetry measured from a photo also includes pose and expression error.',
@@ -420,9 +414,9 @@ export const metrics: Metric[] = [
         'Average-face proxy taken from the female result and applied to men as an assumption. Tau of 3 points is wide because the value has not been tested in men.',
     },
     changeability: 'FIXED',
-    weight: 0.5,
+    weight: 0.25,
     weightRationale:
-      'Downgraded from the seed weight of 1: the only evidence comes from female faces, and the result describes the average face rather than a better-than-average one.',
+      'Downgraded from the seed weight of 1: the only evidence comes from female faces, and the result describes the average face rather than a better-than-average one. The band is an average-face proxy, descriptive only.',
     evidence: 'WEAK',
     evidenceNote:
       'The preferred spacing was found with women’s faces and matches an average face. It has not been shown to hold for men.',
@@ -501,19 +495,12 @@ export const metrics: Metric[] = [
       confidenceInIdeal: 'low',
       populationCaveat: 'Most samples are young adults from Western universities.',
     },
-    scoring: {
-      kind: 'range',
-      lo: 1.75,
-      hi: 2.05,
-      tau: 0.25,
-      tauRationale:
-        'Unverified estimate of the typical adult-male range (about the mean ±1 SD of published values, which differ with landmark definition). It is a typical range, not an ideal, so only far-out values lose points. Replace with a measured norm.',
-    },
+    scoring: { kind: 'none', reason: 'context_only' },
     changeability: 'FIXED',
     changeabilityNote: 'Bone width is fixed. Face fat changes the ratio a little, and that change is tracked in F01.',
-    weight: 0.25,
+    weight: 0,
     weightRationale:
-      'Capped at 0.25: popular in forums, but the research does not show it makes a face more attractive.',
+      'Set to 0 (was 0.25): popular in forums, but the research does not show it makes a face more attractive, and no sourced band exists. Shown as trivia like F11.',
     evidence: 'PSEUDOSCIENCE',
     evidenceNote:
       'Popular in lookmaxxing forums as a “dominance score”, but research does not show a wide ratio makes a face more attractive: one meta-analysis found wider faces rated less attractive, and one speed-dating study found the opposite for short-term dating. Treat as trivia, not a goal.',
@@ -583,24 +570,17 @@ export const metrics: Metric[] = [
         'No evidence-based band for men. The one rating study found a positive tilt preferred in women’s edited faces. “Hunter eyes” is internet language, not a studied category.',
       male: null,
       rationale:
-        'Bashour & Geist (2007) reported that female faces edited to a larger tilt were chosen 93% of the time over unedited ones. That is one study of edited female faces: it says nothing direct about men, and it gives no degree values. The degree band used here is a typical-range assumption.',
+        'Bashour & Geist (2007) reported that female faces edited to a larger tilt were chosen 93% of the time over unedited ones. That is one study of edited female faces: it says nothing direct about men, and it gives no degree values. No degree band is scored; the angle is shown for information only.',
       confidenceInIdeal: 'low',
       populationCaveat: 'Eye shape differs by ancestry; the study tested women only.',
     },
-    scoring: {
-      kind: 'range',
-      lo: 0,
-      hi: 10,
-      tau: 5,
-      tauRationale:
-        'Typical-range assumption (most adult eyes tilt up a few degrees) with a wide tau of 5° because corner placement error is a few degrees and no male preference band exists.',
-    },
+    scoring: { kind: 'none', reason: 'context_only' },
     changeability: 'FIXED',
     changeabilityNote:
       'Eyelid and bone structure set the tilt. Brow position, lid swelling and photo angle change how it reads.',
-    weight: 0.75,
+    weight: 0,
     weightRationale:
-      'Downgraded from 1: one old study on edited female faces. It stays above the smallest weights only because the eye area draws attention in every face.',
+      'Set to 0 (was 0.75): the only study edited female faces and gave no degree values, so no male band can be scored. Shown, not scored.',
     evidence: 'WEAK',
     evidenceNote:
       'Based on one small study that edited women’s faces. Nothing shows that a particular tilt makes a man’s face more attractive, and the “hunter eyes” hype goes far beyond the data.',
@@ -694,16 +674,16 @@ export const metrics: Metric[] = [
     scoring: {
       kind: 'range',
       lo: 0.9,
-      hi: 1.2,
-      tau: 0.15,
+      hi: 1.5,
+      tau: 0.2,
       tauRationale:
-        'App-chosen tolerance around the 1.0 canon, widened because most measured faces differ from it. Not a measured norm.',
+        'App-chosen tolerance, widened from 0.9–1.2 because Farkas-type data generally show nose width exceeding the inner-eye gap in many adults. We did not see the Farkas figures, so this is not a measured norm; replace with the adult-male intercanthal ratio once verified.',
     },
     changeability: 'SURGICAL_ONLY',
     changeabilityNote: 'Only surgery changes nose structure. Camera distance changes how wide it looks in photos.',
-    weight: 0.75,
+    weight: 0.25,
     weightRationale:
-      'The nose is among the most noticed features, but this ratio is a convention and the most distortion-sensitive of the frontal metrics, so it stays mid-low.',
+      'Cut from 0.75: a convention whose band could not be checked against Farkas figures, and the most distortion-sensitive frontal metric.',
     evidence: 'CONVENTION',
     evidenceNote:
       'A rule from art and nose surgery, not a rating-study result. Measured faces often differ from it, and close-up photos widen the nose.',
@@ -744,9 +724,9 @@ export const metrics: Metric[] = [
     },
     changeability: 'SURGICAL_ONLY',
     changeabilityNote: 'Lip structure is fixed. Expression and lighting change how lips read in photos.',
-    weight: 0.5,
+    weight: 0.25,
     weightRationale:
-      'Downgraded from 1: the only rating evidence is for women’s faces.',
+      'Downgraded from 1: the only rating evidence is for women’s faces, so the band is an average-face proxy and descriptive only.',
     evidence: 'WEAK',
     evidenceNote:
       'The one rating study found used women’s faces. There is no comparable work on men’s lips.',
@@ -860,7 +840,7 @@ export const metrics: Metric[] = [
     howMeasured:
       'Manual: on a level side-view photo you place the brow point, the nose-base point and the chin tip; the app computes the angle at the nose base. The face-landmark model is unreliable in side view, so the points are hand-placed. ' +
       PHOTO_ERROR,
-    methods: ['MANUAL_LANDMARKS', 'AUTO_PROFILE_PHOTO'],
+    methods: ['MANUAL_LANDMARKS'],
     scale: { unit: '°', min: 150, max: 190, description: 'Inside angle at the nose base (180° = straight profile)', higherIs: 'target_range' },
     ideal: {
       summary:
@@ -1028,33 +1008,26 @@ export const metrics: Metric[] = [
     measures:
       'The length of the groove between the base of the nose and the upper-lip edge, as a percent of the distance between the pupils.',
     howMeasured:
-      'Automatic: nose-base and upper-lip-edge landmarks on the frontal neutral photo with lips closed and relaxed, divided by pupil distance so the camera scale cancels. This is a short distance (two small studies reported roughly 16 mm in adult men), so a one-pixel landmark error is a large share of it and a smile or a raised lip changes it. No philtrum-to-lip ratio is scored, because we found no evidence for one. ' +
+      'Automatic: nose-base and upper-lip-edge landmarks on the frontal neutral photo with lips closed and relaxed, divided by pupil distance so the camera scale cancels. This is a short distance (a very short distance), so a one-pixel landmark error is a large share of it and a smile or a raised lip changes it. No philtrum-to-lip ratio is scored, because we found no evidence for one. ' +
       PHOTO_ERROR,
     methods: ['AUTO_FRONTAL_PHOTO'],
     scale: { unit: '% of pupil distance', min: 15, max: 40, description: 'Nose base to upper-lip edge ÷ pupil distance', higherIs: 'target_range' },
     ideal: {
       summary:
-        'No evidence-based ideal. Two small studies put adult male philtrum length near 16 mm, which is about 25% of a typical 64 mm pupil distance.',
+        'No evidence-based ideal. No sourced adult-male norm is used, so no band is scored.',
       male: null,
       rationale:
-        'The ~16 mm figure comes from search summaries of two small samples that were not opened, and the pupil distance is a survey mean. We found no rating study tying male philtrum length to attractiveness. A government morphology reference notes that distances this short are measured inaccurately.',
+        'An earlier draft used about 16 mm from unnamed search snippets; that figure is removed because it was never traced to a named, opened source. The NIH record lists norms only for ages 1–18. We found no rating study tying male philtrum length to attractiveness. A government morphology reference notes that distances this short are measured inaccurately.',
       confidenceInIdeal: 'low',
       populationCaveat: 'Two small, mixed-ancestry samples; definitions of the endpoints differ between sources.',
     },
-    scoring: {
-      kind: 'range',
-      lo: 20,
-      hi: 30,
-      tau: 4,
-      tauRationale:
-        'Typical-range assumption around 25% (about 16 mm ÷ 64 mm), not an ideal. Tau is wide because photo error is large for such a short distance.',
-    },
+    scoring: { kind: 'none', reason: 'context_only' },
     changeability: 'FIXED',
-    weight: 0.25,
-    weightRationale: 'Smallest weight: no attractiveness evidence for men and a very error-prone short distance.',
+    weight: 0,
+    weightRationale: 'Set to 0 (was 0.25): the adult-male figure behind the old band was never traced to a named source, and the distance is very error-prone. Shown, not scored.',
     evidence: 'WEAK',
     evidenceNote:
-      'No study was found linking men’s philtrum length to attractiveness. The metric describes where you sit in a typical range and nothing more.',
+      'No study was found linking men’s philtrum length to attractiveness. The value is displayed for information and is not scored.',
     sourceIds: ['face:nih_philtrum', 'face:dodgson2004'],
     drivers: [],
     captureRequirements: ['frontal_neutral'],
@@ -1345,14 +1318,14 @@ export const metrics: Metric[] = [
     measures:
       'How far the lips sit behind or in front of a straight line drawn from the nose tip to the chin tip, seen from the side. Negative means behind the line.',
     howMeasured:
-      'Manual: on a level side-view photo you mark the nose tip, chin tip, and the most forward point of the upper and lower lip. The app reports the average of the two lip distances to the line in mm, scaled from iris size. ' +
+      'Manual: on a level side-view photo you mark the nose tip, chin tip, and the most forward point of the upper and lower lip. The app reports the average of the two lip distances to the line as a percent of nose length (nose bridge to nose base), because a profile photo cannot scale itself: in a true side view the iris is foreshortened, so iris scaling does not work. A ruler or known-size reference in the same photo, or your frontal IPD (F23), can give an estimate in mm. ' +
       PHOTO_ERROR,
     methods: ['MANUAL_LANDMARKS'],
-    scale: { unit: 'mm', min: -12, max: 6, description: 'Average lip distance to the nose–chin line (+ = in front)', higherIs: 'target_range' },
+    scale: { unit: '% of nose length', min: -25, max: 12, description: 'Average lip distance to the nose–chin line, percent of nose length (+ = in front)', higherIs: 'target_range' },
     ideal: {
       summary:
         'The orthodontic convention puts the upper lip about 4 mm and the lower lip about 2 mm behind the line in an average white adult, which averages about −3 mm.',
-      male: { lo: -5, hi: -1 },
+      male: { lo: -10, hi: -2 },
       rationale:
         'Ricketts (1968) set the line. The norms come through secondary sources and shift with ancestry and with fashion toward fuller lips, so they are not a fixed target.',
       confidenceInIdeal: 'low',
@@ -1360,11 +1333,11 @@ export const metrics: Metric[] = [
     },
     scoring: {
       kind: 'range',
-      lo: -5,
-      hi: -1,
-      tau: 3,
+      lo: -10,
+      hi: -2,
+      tau: 6,
       tauRationale:
-        'Band is the average of the two published lip norms ±2 mm; tau of 3 mm covers hand-placed point and scale error.',
+        'Band is the average of the two secondary-source lip norms (about −3 mm) ±2 mm, converted to percent of nose length assuming a roughly 50 mm nose (an app assumption). Tau covers hand-placed point error.',
     },
     changeability: 'FIXED',
     changeabilityNote: 'Set by nose, lip and chin structure. Beard and lip tension change the outline in photos.',

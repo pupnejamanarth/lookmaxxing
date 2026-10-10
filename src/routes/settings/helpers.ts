@@ -65,7 +65,9 @@ export function tableLabel(name: string): string {
     audit: 'Activity log rows',
     kv: 'Settings values',
   }
-  return labels[name] ?? name
+  if (Object.hasOwn(labels, name)) return labels[name]
+  const words = name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim().toLowerCase()
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Unknown table'
 }
 
 export type OriginVerdict = { ok: true } | { ok: false; reason: string }

@@ -1,9 +1,14 @@
-import { useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { db } from '../../store'
 import { type BackupSummary, inspectBackup, restoreBackup } from '../../store/backup'
-import { Banner, Button, Card, Checkbox, ConfirmDialog, Field, formatDateTime, plural } from '../../ui'
+import { Banner, Button, Card, Checkbox, ConfirmDialog, Field, formatDateTime, plural, useFieldControl } from '../../ui'
 import { backupErrorMessage, formatBytes, tableLabel } from './helpers'
 import PassphraseField from './PassphraseField'
+
+function FileField({ onPick }: { onPick: (file: File | null) => void }) {
+  const control = useFieldControl()
+  return <input {...control} className="st-file" type="file" accept=".lmxbackup" onChange={(event) => onPick(event.target.files?.[0] ?? null)} />
+}
 
 export default function RestoreCard() {
   const [file, setFile] = useState<File | null>(null)
@@ -13,6 +18,14 @@ export default function RestoreCard() {
   const [error, setError] = useState<string | null>(null)
   const [summary, setSummary] = useState<BackupSummary | null>(null)
   const [confirming, setConfirming] = useState(false)
+
+  const feedbackRef = useRef<HTMLDivElement>(null)
+  const summaryRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (summary) summaryRef.current?.focus()
+    else if (error) feedbackRef.current?.focus()
+  }, [summary, error])
 
   const reset = () => {
     setSummary(null)
@@ -40,7 +53,12 @@ export default function RestoreCard() {
     } catch (e) {
       throw new Error(backupErrorMessage(e), { cause: e })
     }
-    await db.kv.put({ key: 'lastRestoreAt', value: Date.now() })
+    // Data is already replaced here: a bookkeeping failure must not stop the reload.
+    try {
+      await db.kv.put({ key: 'lastRestoreAt', value: Date.now() })
+    } catch {
+      // ignored on purpose
+    }
     window.location.reload()
   }
 
@@ -57,16 +75,18 @@ export default function RestoreCard() {
         }}
       >
         <Field label="Backup file" hint="A .lmxbackup file made by this app.">
-          <input
-            className="st-file"
-            type="file"
-            accept=".lmxbackup"
-            onChange={(event) => {
-              setFile(event.target.files?.[0] ?? null)
+          <FileField
+            onPick={(f) => {
+              setFile(f)
               reset()
             }}
           />
         </Field>
+        {file ? (
+          <p className="u-small u-dim st-fileinfo">
+            Selected: {file.name} ({formatBytes(file.size)})
+          </p>
+        ) : null}
         <Field label="Passphrase">
           <PassphraseField
             value={pass}
@@ -79,18 +99,20 @@ export default function RestoreCard() {
           />
         </Field>
         <Checkbox checked={show} onChange={setShow} label="Show passphrase" />
-        {error ? (
-          <Banner tone="danger" live>
-            {error}
-          </Banner>
-        ) : null}
+        <div ref={feedbackRef} tabIndex={-1} className="st-focus">
+          {error ? (
+            <Banner tone="danger" live>
+              {error}
+            </Banner>
+          ) : null}
+        </div>
         <Button type="submit" icon="search" loading={busy} disabled={(!file || !pass) && !busy} fullWidth>
           {busy ? 'Decrypting' : 'Check backup'}
         </Button>
       </form>
 
       {summary ? (
-        <div className="u-stack">
+        <div className="u-stack st-focus" ref={summaryRef} tabIndex={-1}>
           <h3>This backup</h3>
           <dl className="st-kv">
             <dt>Created</dt>
@@ -98,10 +120,10 @@ export default function RestoreCard() {
             <dt>App version</dt>
             <dd>{summary.appVersion}</dd>
             {rows.map(([name, count]) => (
-              <div key={name} style={{ display: 'contents' }}>
+              <Fragment key={name}>
                 <dt>{tableLabel(name)}</dt>
                 <dd>{count}</dd>
-              </div>
+              </Fragment>
             ))}
             <dt>Photos and files</dt>
             <dd>

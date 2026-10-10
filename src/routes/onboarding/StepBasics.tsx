@@ -70,7 +70,7 @@ export default function StepBasics({ profile, save, next, back }: StepProps) {
           </Field>
         ) : (
           <div className="u-grid-2">
-            <Field label="Feet" error={shownError && !imperialPartError ? shownError : undefined} required>
+            <Field label="Feet" required>
               <NumberInput value={ft} onChange={setFt} min={0} max={7} step={1} unit="ft" inputMode="numeric" />
             </Field>
             <Field label="Inches" error={imperialPartError ?? undefined} required>
@@ -78,16 +78,21 @@ export default function StepBasics({ profile, save, next, back }: StepProps) {
             </Field>
           </div>
         )}
+        {units === 'imperial' && shownError && !imperialPartError ? (
+          <p className="ui-field__error" role="alert">
+            {shownError}
+          </p>
+        ) : null}
         <p className="u-dim u-small">Stored in centimetres on this device. Height is fixed, so it is not scored as something you can change.</p>
       </Card>
 
       <Card title="Time and training" headingLevel={2}>
         <div className="onb-group">
-          <p className="ui-field__label" aria-hidden="true">
+          <p className="ui-field__label" id="onb-minutes-label">
             Minutes per day for routines
           </p>
           <Segmented
-            label="Minutes per day for routines"
+            labelledBy="onb-minutes-label"
             value={minutes}
             onChange={setMinutes}
             options={[

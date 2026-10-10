@@ -79,8 +79,16 @@ export function patchDaysRemaining(item: Pick<WhitelistItem, 'patchTest'>, now: 
 export const hasReaction = (item: Pick<WhitelistItem, 'patchTest'>): boolean =>
   item.patchTest.status === 'failed' || item.patchTest.entries.some((e) => e.result === 'reaction')
 
+/** The newest logged result is mild irritation. The app holds the pass until a clean result follows. */
+export const hasIrritationHold = (item: Pick<WhitelistItem, 'patchTest'>): boolean => {
+  const { entries } = item.patchTest
+  return entries.length > 0 && entries[entries.length - 1].result === 'mild_irritation'
+}
+
 export function canMarkPassed(item: Pick<WhitelistItem, 'patchTest'>, now: number): boolean {
-  return item.patchTest.status === 'in_progress' && !hasReaction(item) && patchDaysRemaining(item, now) === 0
+  return (
+    item.patchTest.status === 'in_progress' && !hasReaction(item) && !hasIrritationHold(item) && patchDaysRemaining(item, now) === 0
+  )
 }
 
 /** The active switch only works when the store would accept it. */

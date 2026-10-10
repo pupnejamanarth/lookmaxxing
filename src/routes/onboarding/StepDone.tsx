@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
-import { Banner, Button, Card, LinkButton, Spinner, WEEKDAYS, plural, useLive } from '../../ui'
+import { useState } from 'react'
+import { Banner, Button, Card, WEEKDAYS, plural, useLive } from '../../ui'
+import { navigate } from '../../router'
 import { db, store } from '../../store'
 import { DEFAULT_EQUIPMENT_CHECKLIST_KEYS, DEFAULT_PRIVACY_CHECKLIST_KEYS, type Profile } from '../../types'
-import { formatHeight, readInstallState, STEP_KEY } from './helpers'
+import { formatHeight, STEP_KEY } from './helpers'
 import { errorText, type StepProps } from './Parts'
 
 function count(keys: readonly string[], record: Record<string, boolean>): number {
@@ -10,30 +11,28 @@ function count(keys: readonly string[], record: Record<string, boolean>): number
 }
 
 export default function StepDone({ profile, back }: StepProps) {
-  const [final, setFinal] = useState<Profile | null>(null)
+  const [final, setFinal] = useState<Profile | null>(profile.onboardedAt !== null ? profile : null)
   const [error, setError] = useState<string | null>(null)
-  const [attempt, setAttempt] = useState(0)
+  const [busy, setBusy] = useState(false)
   const { value: stack } = useLive(() => store.listWhitelist())
 
-  useEffect(() => {
-    let alive = true
-    store
-      .completeOnboarding()
-      .then(async (p) => {
-        try {
-          await db.kv.delete(STEP_KEY)
-        } catch {
-          // Losing the resume marker is harmless once setup is complete.
-        }
-        if (alive) setFinal(p)
-      })
-      .catch((e: unknown) => {
-        if (alive) setError(errorText(e))
-      })
-    return () => {
-      alive = false
+  const finish = async () => {
+    setError(null)
+    setBusy(true)
+    try {
+      setFinal(await store.completeOnboarding())
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setBusy(false)
     }
-  }, [attempt])
+  }
+
+  const leave = () => {
+    // The resume marker stays until the user leaves, so a reload after finishing lands here.
+    db.kv.delete(STEP_KEY).catch(() => {})
+    navigate('/')
+  }
 
   const p = final ?? profile
   const privacyDone = count(DEFAULT_PRIVACY_CHECKLIST_KEYS, p.privacyChecklist)
@@ -48,7 +47,7 @@ export default function StepDone({ profile, back }: StepProps) {
     ['Time per day', `${p.dailyMinutes} minutes`],
     ['Training', `${p.trainingDaysPerWeek} ${plural(p.trainingDaysPerWeek, 'day')} per week`],
     ['Weekly scan', WEEKDAYS[p.scanWeekday]],
-    ['Home Screen', p.installedToHomeScreen === true ? 'Installed' : p.installedToHomeScreen === false ? (readInstallState().ios ? 'Not installed' : 'Browser tab') : 'Not answered'],
+    ['Home Screen', p.installedToHomeScreen === true ? 'Installed' : p.installedToHomeScreen === false ? 'Not installed' : 'Not answered'],
     ['Privacy checklist', `${privacyDone} of ${DEFAULT_PRIVACY_CHECKLIST_KEYS.length} done`],
     ['Equipment checklist', `${equipmentDone} of ${DEFAULT_EQUIPMENT_CHECKLIST_KEYS.length} done`],
     ['My current stack', stackCount === 0 ? 'Empty' : `${stackCount} ${plural(stackCount, 'item')}`],
@@ -82,11 +81,6 @@ export default function StepDone({ profile, back }: StepProps) {
         <Banner
           tone="danger"
           title="Setup could not be finished"
-          action={
-            <Button size="sm" onClick={() => { setError(null); setAttempt((n) => n + 1) }}>
-              Try again
-            </Button>
-          }
         >
           {error}
         </Banner>
@@ -97,20 +91,20 @@ export default function StepDone({ profile, back }: StepProps) {
           <Banner tone="info" live>
             Setup is complete.
           </Banner>
-        ) : error ? null : (
-          <p className="u-dim u-small">
-            <Spinner size={14} label="Saving" /> Saving.
-          </p>
-        )}
+        ) : null}
         <div className="onb-nav__row">
           <Button variant="secondary" icon="chevron-left" onClick={back}>
             Back
           </Button>
           {final ? (
-            <LinkButton to="/" variant="primary" className="u-grow">
+            <Button variant="primary" className="u-grow" onClick={leave}>
               Go to Home
-            </LinkButton>
-          ) : null}
+            </Button>
+          ) : (
+            <Button variant="primary" className="u-grow" onClick={finish} loading={busy}>
+              Finish setup
+            </Button>
+          )}
         </div>
       </div>
     </div>

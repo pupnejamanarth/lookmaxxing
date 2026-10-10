@@ -52,18 +52,20 @@ function ItemForm({ item, onClose }: { item: WhitelistItem | null; onClose: () =
     }
   }
 
+  const locked = item?.patchTest.status === 'failed'
   const trial = !item && !alreadyUsing && needsPatchTest(category)
 
   return (
     <form className="u-stack" onSubmit={submit} noValidate>
+      {locked ? <Banner tone="info">A reaction was logged. The name and category are locked.</Banner> : null}
       <Field label="Name" required error={touched ? nameError : null}>
-        <TextInput value={name} onChange={setName} maxLength={NAME_MAX + 20} placeholder="Name" autoComplete="off" data-autofocus />
+        <TextInput disabled={locked} value={name} onChange={setName} maxLength={NAME_MAX} placeholder="Name" autoComplete="off" data-autofocus />
       </Field>
       <Field label="Category">
-        <Select value={category} options={CATEGORY_OPTIONS} onChange={setCategory} />
+        <Select disabled={locked} value={category} options={CATEGORY_OPTIONS} onChange={setCategory} />
       </Field>
       <Field label="Notes (optional)" error={touched ? notesError : null}>
-        <TextArea value={notes} onChange={setNotes} rows={3} showCount maxLength={NOTES_MAX + 50} placeholder="Notes" />
+        <TextArea value={notes} onChange={setNotes} rows={3} showCount maxLength={NOTES_MAX} placeholder="Notes" />
       </Field>
       {item ? null : (
         <>

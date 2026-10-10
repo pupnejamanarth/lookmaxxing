@@ -21,14 +21,12 @@ export default function StepStack({ next, back }: StepProps) {
         </p>
       </Card>
 
-      <div className="onb-nav">
+      <StepNav onBack={back} onNext={next} nextLabel={count > 0 ? 'Next' : 'Skip for now'}>
         <Button variant="secondary" icon="list" fullWidth onClick={() => navigate('/whitelist')}>
           Open my current stack
         </Button>
         <p className="u-dim u-small">Your setup progress is saved. Come back from Home to finish.</p>
-      </div>
-
-      <StepNav onBack={back} onNext={next} nextLabel="Skip for now" />
+      </StepNav>
     </div>
   )
 }
