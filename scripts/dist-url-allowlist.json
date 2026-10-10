@@ -3,32 +3,179 @@
   "allow": [
     {
       "host": "www.w3.org",
-      "paths": ["/1999/xlink", "/2000/svg", "/1998/Math/MathML", "/XML/1998/namespace", "/1999/xhtml"],
+      "paths": [
+        "/1999/xlink",
+        "/2000/svg",
+        "/1998/Math/MathML",
+        "/XML/1998/namespace",
+        "/1999/xhtml"
+      ],
       "reason": "XML, SVG, MathML and xlink namespace identifiers that react-dom compares against when creating elements; identifiers, not links"
     },
     {
       "host": "react.dev",
-      "paths": ["/errors/"],
+      "paths": [
+        "/errors/"
+      ],
       "reason": "React production build error text ('visit https://react.dev/errors/NNN'); only ever shown inside an error message"
     },
     {
       "host": "bit.ly",
-      "paths": ["/wb-precache", "/2kdckMn"],
+      "paths": [
+        "/wb-precache",
+        "/2kdckMn"
+      ],
       "reason": "/wb-precache is in a workbox-precaching error message (service worker); /2kdckMn is in a Dexie 'transaction committed too early' error message"
     },
     {
       "host": "tinyurl.com",
-      "paths": ["/y2uuvskb"],
+      "paths": [
+        "/y2uuvskb"
+      ],
       "reason": "Dexie 'IndexedDB API missing' error message text"
     },
     {
       "host": "json-schema.org",
-      "paths": ["/draft"],
+      "paths": [
+        "/draft"
+      ],
       "reason": "zod's JSON Schema export writes these as the value of the $schema field of a generated schema object; an identifier string"
     },
     {
       "literal": "http://[${",
       "reason": "zod's IPv6 validator builds 'http://[' + address + ']' only to test it with new URL(); the string is never fetched"
+    },
+    {
+      "host": "aad.org",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "admin.quintessence-publishing.com",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "angle-orthodontist.kglmeridian.com",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "digitalcommons.usu.edu",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "doi.org",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "elementsofmorphology.nih.gov",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "find.library.upenn.edu",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "head-face-med.biomedcentral.com",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "hsrc.himmelfarb.gwu.edu",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "iro.uiowa.edu",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "jcadonline.com",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "jddonline.com",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "journals.sagepub.com",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "link.springer.com",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "med.libretexts.org",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "periodicos.ufmg.br",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "pmc.ncbi.nlm.nih.gov",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "psych.uni-goettingen.de",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "pubmed.ncbi.nlm.nih.gov",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "pure.psu.edu",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "research-portal.st-andrews.ac.uk",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "research.monash.edu",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "research.usfq.edu.ec",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "research.vu.nl",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "researcher.manipal.edu",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "researchportal.northumbria.ac.uk",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "rule.psych.utoronto.ca",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "stafforini.com",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "ubicomplab.cs.washington.edu",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "www.doi.org",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "www.hhs.gov",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "www.ncbi.nlm.nih.gov",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
+    },
+    {
+      "host": "www.psych.uni-goettingen.de",
+      "reason": "Catalog citation link shown as a clickable reference; never fetched by the app (connect-src 'self'). Reviewed as a scholarly or institutional source host."
     }
   ]
 }
