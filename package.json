@@ -4,7 +4,9 @@
   "private": true,
   "description": "Local-first, on-device appearance measurement app. No photo or data ever leaves the device.",
   "type": "module",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -14,9 +16,13 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "guard": "node scripts/check-no-personal-files.mjs",
-    "check": "npm run guard && npm run typecheck && npm run lint && npm test"
+    "check": "npm run guard && npm run typecheck && npm run lint && npm test",
+    "vendor": "node scripts/vendor-mediapipe.mjs",
+    "predev": "node scripts/vendor-mediapipe.mjs",
+    "prebuild": "node scripts/vendor-mediapipe.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "1.1.0",
     "dexie": "^4.4.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
