@@ -48,6 +48,18 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,wasm,task,tflite,json}'],
+        // First-load download: the face model (3.8 MB) and the SIMD MediaPipe runtime (13.3 MB) are precached; the
+        // 12.5 MB no-SIMD build is not. Only a browser without WebAssembly SIMD (before iOS 16.4 / Chrome 91) ever asks
+        // for it, so it is cached the first time it is used instead of being downloaded by everyone. scripts/vendor-mediapipe.mjs
+        // ships no other runtime file, and tests/e2e/vision.spec.ts checks which ones a real load requests.
+        globIgnores: ['**/mediapipe/wasm/vision_wasm_nosimd_internal.*'],
+        runtimeCaching: [
+          {
+            urlPattern: /\/mediapipe\/wasm\/vision_wasm_nosimd_internal\.(?:js|wasm)$/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'lmx-mediapipe-nosimd', cacheableResponse: { statuses: [200] } },
+          },
+        ],
         maximumFileSizeToCacheInBytes: 40 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         navigateFallback: 'index.html',

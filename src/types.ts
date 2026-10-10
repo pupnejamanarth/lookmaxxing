@@ -72,6 +72,8 @@ export type AuditEvent =
   | 'backup_exported'
   | 'backup_restored'
   | 'data_deleted'
+  | 'scan_saved'
+  | 'scan_deleted'
   | 'network_blocked'
 
 export interface AuditEntry {

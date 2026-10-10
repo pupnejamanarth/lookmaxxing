@@ -10,6 +10,9 @@ const Methods = lazy(() => import('./routes/Methods'))
 const Whitelist = lazy(() => import('./routes/Whitelist'))
 const Settings = lazy(() => import('./routes/Settings'))
 const About = lazy(() => import('./routes/About'))
+const QuickScan = lazy(() => import('./routes/QuickScan'))
+const Scans = lazy(() => import('./routes/Scans'))
+const Report = lazy(() => import('./routes/Report'))
 
 interface Resolved {
   element: ReactElement
@@ -42,6 +45,13 @@ function resolve(segments: readonly string[]): Resolved {
       break
     case 'about':
       if (depth === 1) return page(<About />)
+      break
+    case 'scan':
+      if (depth === 1) return page(<QuickScan />, false)
+      break
+    case 'scans':
+      if (depth === 1) return page(<Scans />)
+      if (depth === 2 && second !== '') return page(<Report id={second!} />)
       break
   }
   return page(<NotFound />)
