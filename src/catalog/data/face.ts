@@ -1387,6 +1387,7 @@ export const sources: Source[] = [
     id: 'face:coetzee2009',
     kind: 'peer_reviewed',
     citation: 'Coetzee, V., Perrett, D. I., & Stephen, I. D. (2009). Facial adiposity: A cue to health? Perception, 38(11), 1700–1711.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://doi.org/10.1068/p6423',
     verified: false,
     verificationNote:
@@ -1398,6 +1399,7 @@ export const sources: Source[] = [
     id: 'face:coetzee2010',
     kind: 'peer_reviewed',
     citation: 'Coetzee, V., Chen, J., Perrett, D. I., & Stephen, I. D. (2010). Deciphering faces: Quantifiable visual cues to weight. Perception, 39(1), 51–61.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://doi.org/10.1068/p6560',
     verified: false,
     verificationNote:
@@ -1409,6 +1411,7 @@ export const sources: Source[] = [
     id: 'face:rerule2016',
     kind: 'peer_reviewed',
     citation: 'Re, D. E., & Rule, N. O. (2016). Heavy Matters (full subtitle not confirmed in this session). Social Psychological and Personality Science.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://rule.psych.utoronto.ca/pubs/2016/Re&Rule(2016_SPPS).pdf',
     verified: false,
     verificationNote:
@@ -1440,6 +1443,7 @@ export const sources: Source[] = [
     id: 'face:profile_review2021',
     kind: 'peer_reviewed',
     citation: 'Laypeople’s perception of facial profile aesthetics: a systematic review. Journal of Aligner Orthodontics (2021). Authors not confirmed in this session.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://admin.quintessence-publishing.com/anz/en/article/1128713/journal-of-aligner-orthodontics/2021/01/laypeoples-perception-of-facial-profile-aesthetics-a-systematic-review',
     verified: false,
     verificationNote:
@@ -1451,6 +1455,7 @@ export const sources: Source[] = [
     id: 'face:rhodes2006',
     kind: 'peer_reviewed',
     citation: 'Rhodes, G. (2006). The evolutionary psychology of facial beauty. Annual Review of Psychology, 57, 199–226.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://doi.org/10.1146/annurev.psych.57.102904.190208',
     verified: false,
     verificationNote:
@@ -1472,6 +1477,7 @@ export const sources: Source[] = [
     id: 'face:alsebaei2015',
     kind: 'peer_reviewed',
     citation: 'Al-Sebaei, M. O. (2015). Study of the neoclassical facial canons in young adults of Arabian Peninsula origin (exact title not confirmed in this session). Head & Face Medicine, 11, 4.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://head-face-med.biomedcentral.com/articles/10.1186/s13005-015-0064-y',
     verified: false,
     verificationNote:
@@ -1483,6 +1489,7 @@ export const sources: Source[] = [
     id: 'face:pallett2010',
     kind: 'peer_reviewed',
     citation: 'Pallett, P. M., Link, S., & Lee, K. (2010). New “golden” ratios for facial beauty. Vision Research, 50(2), 149–154.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC2814183',
     verified: false,
     verificationNote:
@@ -1494,6 +1501,7 @@ export const sources: Source[] = [
     id: 'face:geniole2015',
     kind: 'peer_reviewed',
     citation: 'Geniole, S. N., Denson, T. F., Dixson, B. J., Carré, J. M., & McCormick, C. M. (2015). Evidence from meta-analyses of the facial width-to-height ratio as an evolved cue of threat. PLoS ONE, 10(7), e0132726.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4504483/',
     verified: false,
     verificationNote:
@@ -1505,6 +1513,7 @@ export const sources: Source[] = [
     id: 'face:valentine2014',
     kind: 'peer_reviewed',
     citation: 'Valentine, K. A., et al. (2014). Judging a man by the width of his face: The role of facial ratios and dominance in mate choice at speed-dating events. Psychological Science.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://research-portal.st-andrews.ac.uk/en/publications/judging-a-man-by-the-width-of-his-face-the-role-of-facial-ratios-/',
     verified: false,
     verificationNote:
@@ -1516,6 +1525,7 @@ export const sources: Source[] = [
     id: 'face:bashour2007',
     kind: 'peer_reviewed',
     citation: 'Bashour, M., & Geist, C. E. (2007). Is medial canthal tilt a powerful cue for facial attractiveness? Ophthalmic Plastic and Reconstructive Surgery, 23(1).',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://hsrc.himmelfarb.gwu.edu/smhs_ophthalm_facpubs/302',
     verified: false,
     verificationNote:
@@ -1527,6 +1537,7 @@ export const sources: Source[] = [
     id: 'face:sundelin2013',
     kind: 'peer_reviewed',
     citation: 'Sundelin, T., et al. (2013). Cues of fatigue: effects of sleep deprivation on facial appearance. Sleep.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://research.vu.nl/en/publications/cues-of-fatigue-effects-of-sleep-deprivation-on-facial-appearance/',
     verified: false,
     verificationNote:
@@ -1538,6 +1549,7 @@ export const sources: Source[] = [
     id: 'face:ward2018',
     kind: 'peer_reviewed',
     citation: 'Ward, B., Ward, M., Fried, O., & Paskhover, B. (2018). Nasal distortion in short-distance photographs: The selfie effect. JAMA Facial Plastic Surgery.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://doi.org/10.1001/jamafacial.2018.0009',
     verified: false,
     verificationNote:
@@ -1549,6 +1561,7 @@ export const sources: Source[] = [
     id: 'face:powell1984',
     kind: 'textbook',
     citation: 'Powell, N., & Humphreys, B. (1984). Proportions of the Aesthetic Face. New York: Thieme-Stratton.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://find.library.upenn.edu/catalog/991134533503681',
     verified: false,
     verificationNote:
@@ -1560,6 +1573,7 @@ export const sources: Source[] = [
     id: 'face:popenko2017',
     kind: 'peer_reviewed',
     citation: 'Popenko, N. A., et al. (2017). A quantitative approach to determining the ideal female lip aesthetic and its effect on facial attractiveness. JAMA Facial Plastic Surgery, 19(4), 261–267.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://doi.org/10.1001/jamafacial.2016.2049',
     verified: false,
     verificationNote:
@@ -1571,6 +1585,7 @@ export const sources: Source[] = [
     id: 'face:cunningham1990',
     kind: 'peer_reviewed',
     citation: 'Cunningham, M. R., Barbee, A. P., & Pike, C. L. (1990). What do women want? Facialmetric assessment of multiple motives in the perception of male facial physical attractiveness. Journal of Personality and Social Psychology, 59(1), 61–72.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://pubmed.ncbi.nlm.nih.gov/2213490/',
     verified: false,
     verificationNote:
@@ -1592,6 +1607,7 @@ export const sources: Source[] = [
     id: 'face:holland2008',
     kind: 'peer_reviewed',
     citation: 'Holland, E. (2008). Marquardt’s Phi mask: pitfalls of relying on fashion models and the golden ratio to describe a beautiful face. Aesthetic Plastic Surgery, 32, 200–208.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://link.springer.com/doi/10.1007/s00266-007-9080-z',
     verified: false,
     verificationNote:
@@ -1603,6 +1619,7 @@ export const sources: Source[] = [
     id: 'face:otoplasty_atlas',
     kind: 'textbook',
     citation: 'Open Access Atlas of Otolaryngology, Head & Neck Operative Surgery: Otoplasty surgical technique (University of Cape Town). Authors not confirmed in this session.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://med.libretexts.org/Bookshelves/Anatomy_and_Physiology/Atlas_of_Otolaryngology_Head_and_Neck_Operative_Surgery/02%3A_Otology/2.15%3A_Otoplasty_Surgical_Technique',
     verified: false,
     verificationNote:
@@ -1614,6 +1631,7 @@ export const sources: Source[] = [
     id: 'face:nih_philtrum',
     kind: 'government_or_standards',
     citation: 'NIH Elements of Morphology (NHGRI). Anatomy of the philtrum. Standard terminology reference.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://elementsofmorphology.nih.gov/anatomy-philtrum.shtml',
     verified: false,
     verificationNote:
@@ -1625,6 +1643,7 @@ export const sources: Source[] = [
     id: 'face:dodgson2004',
     kind: 'peer_reviewed',
     citation: 'Dodgson, N. A. (2004). Variation and extrema of human interpupillary distance. Proceedings of SPIE, 5291, 36–46.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://doi.org/10.1117/12.529999',
     verified: false,
     verificationNote:
@@ -1636,6 +1655,7 @@ export const sources: Source[] = [
     id: 'face:iris_scale2023',
     kind: 'peer_reviewed',
     citation: 'A deep learning framework to scale linear facial measurements to actual size using horizontal visible iris diameter: a study on an Iranian population. Scientific Reports (2023). Authors not confirmed in this session.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10447546/',
     verified: false,
     verificationNote:
@@ -1647,6 +1667,7 @@ export const sources: Source[] = [
     id: 'face:packiriswamy2013',
     kind: 'peer_reviewed',
     citation: 'Packiriswamy, V., Kumar, P., & Bashour, M. (2013). Photogrammetric analysis of eyebrow and upper eyelid dimensions in young adults (exact title wording not confirmed). Aesthetic Surgery Journal.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://researcher.manipal.edu/en/publications/photogrammetric-analysis-of-eyebrow-and-upper-eyelid-dimensions-i/',
     verified: false,
     verificationNote:
@@ -1658,6 +1679,7 @@ export const sources: Source[] = [
     id: 'face:sadr2003',
     kind: 'peer_reviewed',
     citation: 'Sadr, J., Jarudi, I., & Sinha, P. (2003). The role of eyebrows in face recognition. Perception, 32(3), 285–293.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://doi.org/10.1068/p5027',
     verified: false,
     verificationNote:
@@ -1669,6 +1691,7 @@ export const sources: Source[] = [
     id: 'face:langlois1990',
     kind: 'peer_reviewed',
     citation: 'Langlois, J. H., & Roggman, L. A. (1990). Attractive faces are only average. Psychological Science, 1(2), 115–121.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://digitalcommons.usu.edu/fchd_facpub/237',
     verified: false,
     verificationNote:
@@ -1680,6 +1703,7 @@ export const sources: Source[] = [
     id: 'face:scott2014',
     kind: 'peer_reviewed',
     citation: 'Scott, I. M. L., et al. (2014). Human preferences for sexually dimorphic faces may be evolutionarily novel. Proceedings of the National Academy of Sciences, 111(40), 14388–14393.',
+    // privacy-lint-allow: citation link shown as text, never fetched by the app
     url: 'https://doi.org/10.1073/pnas.1409643111',
     verified: false,
     verificationNote:
