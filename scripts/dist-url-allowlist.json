@@ -1,0 +1,32 @@
+{
+  "description": "Absolute URLs that are allowed to appear as plain text inside dist/. Every entry is an inert string embedded by a library (an XML namespace id, or a link inside an error message). None of them is ever requested; the CSP (connect-src 'self') would block it if it were. Keep this list minimal: anything new that shows up in a build must be looked at and either removed from the source or added here with a reason.",
+  "allow": [
+    {
+      "host": "www.w3.org",
+      "reason": "XML, SVG, MathML and xlink namespace identifiers that react-dom compares against when creating elements; identifiers, not links"
+    },
+    {
+      "host": "react.dev",
+      "paths": ["/errors/"],
+      "reason": "React production build error text ('visit https://react.dev/errors/NNN'); only ever shown inside an error message"
+    },
+    {
+      "host": "bit.ly",
+      "paths": ["/wb-precache", "/2kdckMn"],
+      "reason": "/wb-precache is in a workbox-precaching error message (service worker); /2kdckMn is in a Dexie 'transaction committed too early' error message"
+    },
+    {
+      "host": "tinyurl.com",
+      "paths": ["/y2uuvskb"],
+      "reason": "Dexie 'IndexedDB API missing' error message text"
+    },
+    {
+      "host": "json-schema.org",
+      "reason": "zod's JSON Schema export writes these as the value of the $schema field of a generated schema object; an identifier string"
+    },
+    {
+      "literal": "http://[${",
+      "reason": "zod's IPv6 validator builds 'http://[' + address + ']' only to test it with new URL(); the string is never fetched"
+    }
+  ]
+}
