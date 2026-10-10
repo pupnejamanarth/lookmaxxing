@@ -23,7 +23,7 @@ export interface RouteInfo {
   segments: string[]
 }
 
-const APP_NAME = 'Unmoggable'
+const APP_NAME = 'Lookmaxing'
 
 /** Turns a raw location.hash (or a link target) into a normalised path. */
 export function normalizePath(raw: string): string {

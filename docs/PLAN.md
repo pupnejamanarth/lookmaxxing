@@ -1,4 +1,4 @@
-# Unmoggable – build plan and methodology
+# Lookmaxing – build plan and methodology
 
 A private, on-device appearance-measurement app for one user. This document is the contract the code is
 built against. The metric catalog itself (ranges, weights, sources, evidence grades) lives in

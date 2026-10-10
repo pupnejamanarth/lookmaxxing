@@ -1,4 +1,4 @@
-# Unmoggable
+# Lookmaxing
 
 A private appearance-measurement app for one person: you. It measures the parts of your appearance that you can
 actually change (body fat, skin, hair, grooming, posture and so on), scores each one honestly with a stated reason,

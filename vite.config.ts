@@ -31,8 +31,8 @@ export default defineConfig({
       includeAssets: ['icons/*.png'],
       manifest: {
         id: BASE,
-        name: 'Unmoggable',
-        short_name: 'Unmoggable',
+        name: 'Lookmaxing',
+        short_name: 'Lookmaxing',
         description: 'Private, on-device appearance measurement. Nothing leaves your phone.',
         start_url: BASE,
         scope: BASE,

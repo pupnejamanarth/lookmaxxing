@@ -51,7 +51,7 @@ test('backup: export, wipe, restore, wrong and weak passphrases', async ({ page 
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel(/Type DELETE/).fill('DELETE')
   await Promise.all([page.waitForEvent('load'), dialog.getByRole('button', { name: 'Delete everything' }).click()])
-  await expect(page.getByRole('heading', { level: 1, name: 'Unmoggable' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Lookmaxing' })).toBeVisible()
   await open(page, '/whitelist')
   await expect(page.getByText('No products yet')).toBeVisible()
 

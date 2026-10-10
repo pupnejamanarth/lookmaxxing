@@ -204,10 +204,10 @@ describe('validatePassphrase', () => {
 })
 
 describe('backupFilename', () => {
-  it('is unmoggable-YYYY-MM-DD.lmxbackup in local time', () => {
-    expect(backupFilename(new Date(2026, 9, 10, 23, 59))).toBe('unmoggable-2026-10-10.lmxbackup')
-    expect(backupFilename(new Date(2026, 0, 5, 0, 1))).toBe('unmoggable-2026-01-05.lmxbackup')
-    expect(backupFilename()).toMatch(/^unmoggable-\d{4}-\d{2}-\d{2}\.lmxbackup$/)
+  it('is lookmaxing-YYYY-MM-DD.lmxbackup in local time', () => {
+    expect(backupFilename(new Date(2026, 9, 10, 23, 59))).toBe('lookmaxing-2026-10-10.lmxbackup')
+    expect(backupFilename(new Date(2026, 0, 5, 0, 1))).toBe('lookmaxing-2026-01-05.lmxbackup')
+    expect(backupFilename()).toMatch(/^lookmaxing-\d{4}-\d{2}-\d{2}\.lmxbackup$/)
   })
 
   it('refuses an invalid date', () => {
@@ -1120,6 +1120,6 @@ describe('public surface', () => {
     expect(error).toBeInstanceOf(Error)
     expect(error.name).toBe('BackupError')
     expect(error.code).toBe('bad_magic')
-    expect(error.message).toMatch(/not an Unmoggable backup/)
+    expect(error.message).toMatch(/not a Lookmaxing backup/)
   })
 })

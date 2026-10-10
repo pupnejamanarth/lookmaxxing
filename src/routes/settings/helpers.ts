@@ -34,7 +34,7 @@ export function formatPercent(usage: number | null, quota: number | null): strin
 
 const BACKUP_MESSAGES: Record<BackupErrorCode, string> = {
   weak_passphrase: 'The passphrase is too weak. Use at least 12 characters.',
-  bad_magic: 'This is not an Unmoggable backup file.',
+  bad_magic: 'This is not a Lookmaxing backup file.',
   unsupported_version: 'This backup was made by a different version of the app and cannot be opened.',
   wrong_passphrase_or_corrupt: 'Wrong passphrase, or the file is damaged. The app cannot tell which.',
   too_large: 'This backup is too large to handle on this device.',

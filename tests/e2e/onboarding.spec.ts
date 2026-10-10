@@ -58,7 +58,7 @@ test.describe('onboarding', () => {
     await page.getByRole('button', { name: 'Go to Home' }).click()
 
     await expect(page).toHaveURL(/#\/$/)
-    await expect(page.getByRole('heading', { level: 1, name: 'Unmoggable' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: 'Lookmaxing' })).toBeVisible()
     await expect(page.locator('strong', { hasText: 'Setup complete.' })).toBeVisible()
   })
 

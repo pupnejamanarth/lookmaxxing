@@ -10,7 +10,7 @@ test('works offline after the service worker took control', async ({ page, conte
 
   await context.setOffline(true)
   await page.reload()
-  await expect(page.getByRole('heading', { level: 1, name: 'Unmoggable' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Lookmaxing' })).toBeVisible()
 
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Metrics' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Metrics' })).toBeVisible()

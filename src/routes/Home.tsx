@@ -247,7 +247,7 @@ export default function Home() {
 
   return (
     <div className="u-stack u-stack--lg">
-      <PageHeader title="Unmoggable" subtitle="Status of this device and your setup." />
+      <PageHeader title="Lookmaxing" subtitle="Status of this device and your setup." />
 
       {error ? (
         <Banner tone="danger" title="Local storage is not available" live>

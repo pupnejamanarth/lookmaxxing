@@ -65,11 +65,11 @@ export function validatePassphrase(p: string): { ok: boolean; reason?: string } 
   return { ok: true }
 }
 
-/** Local calendar date, e.g. unmoggable-2026-10-10.lmxbackup. */
+/** Local calendar date, e.g. lookmaxing-2026-10-10.lmxbackup. */
 export function backupFilename(date: Date = new Date()): string {
   if (Number.isNaN(date.getTime())) throw new RangeError('Invalid date')
   const pad = (n: number, width = 2): string => String(n).padStart(width, '0')
-  return `unmoggable-${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.lmxbackup`
+  return `lookmaxing-${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.lmxbackup`
 }
 
 const sizeLimit = (deps: BackupDeps): number => Math.min(MAX_BACKUP_BYTES, deps.maxBytes ?? MAX_BACKUP_BYTES)

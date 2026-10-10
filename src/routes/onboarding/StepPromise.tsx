@@ -8,7 +8,7 @@ export default function StepPromise({ next }: StepProps) {
 
       <Card title="What this is" icon="metrics">
         <p>
-          Unmoggable measures your face, skin, hair, body and posture from photos and tape measurements you take
+          Lookmaxing measures your face, skin, hair, body and posture from photos and tape measurements you take
           yourself. It rates the results against published ranges for men.
         </p>
         <p>Brutal means accurate. The app tells you the numbers. It does not flatter you.</p>

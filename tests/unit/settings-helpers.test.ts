@@ -24,7 +24,7 @@ describe('settings helpers', () => {
     expect(formatPercent(null, 1000)).toBe('unknown')
   })
   it('maps backup errors', () => {
-    expect(backupErrorMessage(new BackupError('bad_magic'))).toContain('not an Unmoggable backup')
+    expect(backupErrorMessage(new BackupError('bad_magic'))).toContain('not a Lookmaxing backup')
     expect(backupErrorMessage(new BackupError('wrong_passphrase_or_corrupt'))).toContain('Wrong passphrase')
     expect(backupErrorMessage(new Error('boom'))).toBe('Something went wrong. Nothing was changed.')
     expect(backupErrorMessage(null)).toBe('Something went wrong. Nothing was changed.')
