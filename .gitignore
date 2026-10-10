@@ -1,0 +1,37 @@
+# --- build / tooling ---
+node_modules
+dist
+dev-dist
+coverage
+playwright-report
+test-results
+.DS_Store
+.env
+.env.*
+
+# --- PRIVACY: personal data must never be committed -----------------------------------
+# Encrypted backups, local databases and any photo/video/audio are ignored everywhere
+# except the explicit allow-list below (synthetic fixtures + app icons).
+*.lmxbackup
+*.sqlite
+*.sqlite3
+*.db
+/data
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.heic
+*.heif
+*.avif
+*.bmp
+*.tif
+*.tiff
+*.mp4
+*.mov
+*.m4a
+*.wav
+*.mp3
+!public/icons/**
+!tests/fixtures/**
