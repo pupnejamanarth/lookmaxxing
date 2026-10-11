@@ -89,7 +89,9 @@ describe('public surface', () => {
   it('declares the v1 schema', () => {
     const { database } = setup()
     const schema = Object.fromEntries(database.tables.map((t) => [t.name, t.schema.primKey.keyPath]))
-    expect(schema).toEqual({ profile: 'id', whitelist: 'id', audit: 'id', kv: 'key' })
+    // v1 tables are unchanged; v2 (M1) only adds scan tables
+    expect(schema).toMatchObject({ profile: 'id', whitelist: 'id', audit: 'id', kv: 'key' })
+    expect(Object.keys(schema).sort()).toEqual(['audit', 'baselines', 'kv', 'measurements', 'overall', 'photos', 'profile', 'scans', 'scores', 'whitelist'])
     expect(database.table('whitelist').schema.indexes.map((i) => i.name).sort()).toEqual(['active', 'addedAt', 'category'])
     expect(database.table('audit').schema.primKey.auto).toBe(true)
     expect(database.table('audit').schema.indexes.map((i) => i.name).sort()).toEqual(['event', 'ts'])
@@ -1148,19 +1150,19 @@ describe('deleteAllData', () => {
 
   it('also clears tables added by a later schema version (it iterates database.tables)', async () => {
     class FutureDB extends LookmaxxingDB {
-      declare scans: Table<{ id: string }, string>
+      declare future: Table<{ id: string }, string>
       constructor(name: string) {
         super(name)
-        this.version(2).stores({ scans: 'id' })
+        this.version(3).stores({ future: 'id' })
       }
     }
     const future = new FutureDB(`lmx-store-test-${++seq}`)
     opened.push(future)
     const store = createStore(future)
-    await future.scans.bulkPut([{ id: 'a' }, { id: 'b' }])
+    await future.future.bulkPut([{ id: 'a' }, { id: 'b' }])
     await store.addWhitelistItem({ name: 'Synthetic', category: 'cleanser' })
     await store.deleteAllData()
-    expect(await future.scans.count()).toBe(0)
+    expect(await future.future.count()).toBe(0)
     expect(await future.whitelist.count()).toBe(0)
     expect(await future.audit.count()).toBe(1)
   })

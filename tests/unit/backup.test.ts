@@ -244,7 +244,7 @@ describe('backup file (real PBKDF2)', () => {
     expect(summary.tables.whitelist).toBe(2)
     expect(summary.tables.kv).toBe(2)
     expect(summary.tables.audit).toBeGreaterThanOrEqual(4)
-    expect(Object.keys(summary.tables).sort()).toEqual(['audit', 'kv', 'profile', 'whitelist'])
+    expect(Object.keys(summary.tables).sort()).toEqual(['audit', 'baselines', 'kv', 'measurements', 'overall', 'photos', 'profile', 'scans', 'scores', 'whitelist'])
   })
 
   it('round-trips identical rows and identical Blob bytes and type, replacing everything already there', async () => {
@@ -337,7 +337,7 @@ describe('backup file (real PBKDF2)', () => {
       tables: Record<string, { rows: unknown[] }>
     }
     expect(manifest).toMatchObject({ container: 'lmx-container', containerVersion: 1, blobs: 2 })
-    expect(Object.keys(manifest.tables).sort()).toEqual(['audit', 'kv', 'profile', 'whitelist'])
+    expect(Object.keys(manifest.tables).sort()).toEqual(['audit', 'baselines', 'kv', 'measurements', 'overall', 'photos', 'profile', 'scans', 'scores', 'whitelist'])
     let offset = 4 + manifestLength
     const sizes: number[] = []
     for (let i = 0; i < manifest.blobs; i++) {
@@ -788,9 +788,10 @@ describe('backup file (fast KDF)', () => {
       ])
       await target.kv.put({ key: 'precious', value: { photo: new Blob([PNG_LIKE], { type: 'image/png' }) } })
       const before = await dump(target)
-      expect(target.tables.at(-1)!.name).toBe('kv')
+      const order = target.tables.map((t) => t.name)
+      expect(order.indexOf('audit')).toBeLessThan(order.indexOf('kv'))
 
-      // kv is refilled last: by then profile, whitelist and audit were cleared and refilled.
+      // kv is refilled after audit: by then audit was already cleared and refilled, so a failure here must roll it back.
       target.kv.hook('creating', () => {
         throw new Error('disk on fire')
       })

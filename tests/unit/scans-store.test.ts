@@ -2,10 +2,21 @@ import Dexie from 'dexie'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ShotType } from '../../src/catalog/schema'
 import type { Measurement, MetricScore, OverallScore, PhotoRecord, ScanKind, ScoreFacts, ShotQc } from '../../src/domain/types'
+import { METRICS } from '../../src/catalog'
+import { WEIGHTS_VERSION, scoreScan } from '../../src/scoring'
 import * as storeModule from '../../src/store'
 import { LookmaxxingDB, StoreError, createStore, watch } from '../../src/store'
 import { exportBackup, restoreBackup } from '../../src/store/backup'
-import { createScansStore, findJpegMetadata, type BaselineToStore, type ScanBundle, type ScansStore } from '../../src/store/scans'
+import { BackupError } from '../../src/store/backupError'
+import {
+  StorageFullError,
+  createScansStore,
+  findJpegMetadata,
+  verifyScanRows,
+  type BaselineToStore,
+  type ScanBundle,
+  type ScansStore,
+} from '../../src/store/scans'
 
 // Synthetic data only: the "photos" below are hand-built JPEG segment structures, not images of anyone.
 const PASS = 'correct horse battery staple'
@@ -74,7 +85,7 @@ function facts(over: Partial<ScoreFacts> = {}): ScoreFacts {
     ruleKind: 'band',
     shotLabel: 'Frontal, neutral',
     sourceIds: ['src-1'],
-    weight: 0.02,
+    weight: 5.75,
     evidence: 'MODERATE',
     changeability: 'FIXED',
     pointsLost: 0,
@@ -136,12 +147,12 @@ function overall(scanId: string, over: Partial<OverallScore> = {}): OverallScore
     scanId,
     appearance: null,
     band: null,
-    coverage: 0.16,
+    coverage: 0.0575,
     status: 'NOT_AVAILABLE',
     pointsLost: { FIXED: 0, SURGICAL_OR_PROFESSIONAL: 0, CHANGEABLE: 0 },
     drag: [],
     cai: null,
-    weightsVersion: 'weights-1',
+    weightsVersion: WEIGHTS_VERSION,
     rulesetVersion: 'ruleset-1',
     ...over,
   }
@@ -155,10 +166,29 @@ interface BundleOptions {
   photoId?: string
 }
 
-/** F05 scored, F01 a first-scan baseline metric (not scored), F10 refused. */
+/** A metric measured for the first time: it has a value, is left unscored, and is confident enough to become the baseline. */
+function firstMeasurement(bundle: ScanBundle, { metricId, value }: BaselineToStore): void {
+  const id = bundle.scan.id
+  const m = bundle.measurements.find((x) => x.metricId === metricId)
+  if (m) m.value = value
+  else bundle.measurements.push(measurement(id, metricId, { value }))
+  if (!bundle.scores.some((x) => x.metricId === metricId)) {
+    bundle.scores.push(
+      score(id, metricId, {
+        score: null,
+        facts: null,
+        confidence: { band: 'MEDIUM', value: 0.6 },
+        reason: `${metricId} has no norm anchor. This first measurement of ${value} ratio is saved as your baseline and is not scored.`,
+      }),
+    )
+  }
+}
+
+/** F05 scored, F01 a first-scan baseline metric (not scored), F10 refused. Every baseline is backed by a measurement of its own. */
 function makeBundle(o: BundleOptions = {}): ScanBundle {
   const id = o.id ?? 'scan-1'
-  return {
+  const baselines = o.baselines ?? [{ metricId: 'F01', value: 0.42 }]
+  const bundle: ScanBundle = {
     scan: {
       id,
       takenAt: o.takenAt ?? T0,
@@ -183,7 +213,7 @@ function makeBundle(o: BundleOptions = {}): ScanBundle {
       score(id, 'F01', {
         score: null,
         facts: null,
-        confidence: { band: 'LOW', value: 0.3 },
+        confidence: { band: 'MEDIUM', value: 0.6 },
         reason: 'F01 has no norm anchor. This first measurement of 0.42 ratio is saved as your baseline and is not scored.',
       }),
       score(id, 'F10', {
@@ -194,8 +224,10 @@ function makeBundle(o: BundleOptions = {}): ScanBundle {
       }),
     ],
     overall: overall(id),
-    baselinesToStore: o.baselines ?? [{ metricId: 'F01', value: 0.42 }],
+    baselinesToStore: baselines,
   }
+  for (const baseline of baselines) firstMeasurement(bundle, baseline)
+  return bundle
 }
 
 // ───────────────────────────── helpers ─────────────────────────────
@@ -398,16 +430,40 @@ describe('saveScan and getScanBundle', () => {
     bundle.measurements = []
     bundle.scores = []
     bundle.baselinesToStore = []
+    bundle.overall = overall('scan-1', { coverage: 0 })
     await s.saveScan(bundle)
     expect(await counts(database)).toMatchObject({ scans: 1, photos: 0, measurements: 0, scores: 0, overall: 1, baselines: 0, audit: 1 })
   })
 
-  it('accepts an overall score at exactly 50 % coverage and a numeric one above it', async () => {
+  // An older weights version cannot be recomputed from today's catalog, so only the status rule applies to these.
+  it.each<[number, 'FINAL' | 'PROVISIONAL' | 'NOT_AVAILABLE']>([
+    [0.5, 'PROVISIONAL'],
+    [0.6, 'PROVISIONAL'],
+    [0.7499, 'PROVISIONAL'],
+    [0.75, 'FINAL'],
+    [0.9, 'FINAL'],
+    [0.4999, 'NOT_AVAILABLE'],
+    [0.16, 'NOT_AVAILABLE'],
+  ])('accepts %s coverage with status %s', async (coverage, status) => {
     const { s } = setup()
     const bundle = makeBundle()
-    bundle.overall = overall('scan-1', { coverage: 0.5, status: 'PROVISIONAL', appearance: 61, band: 4 })
+    const numeric = status === 'NOT_AVAILABLE' ? { appearance: null, band: null } : { appearance: 61, band: 4 }
+    bundle.overall = overall('scan-1', { coverage, status, weightsVersion: 'weights-0', ...numeric })
     await s.saveScan(bundle)
-    expect((await s.getScanBundle('scan-1'))!.overall).toMatchObject({ appearance: 61, status: 'PROVISIONAL' })
+    expect((await s.getScanBundle('scan-1'))!.overall).toMatchObject({ coverage, status, ...numeric })
+  })
+
+  it('coverage is the HIGH and MEDIUM scored weight over the catalog total; a LOW score is shown but not counted', async () => {
+    const { s } = setup()
+    const bundle = makeBundle()
+    bundle.measurements.push(measurement('scan-1', 'F07'), measurement('scan-1', 'F08'))
+    bundle.scores.push(
+      score('scan-1', 'F07', { facts: facts({ weight: 0.25 }), confidence: { band: 'HIGH', value: 0.9 } }),
+      score('scan-1', 'F08', { facts: facts({ weight: 0.25 }), confidence: { band: 'LOW', value: 0.3 } }),
+    )
+    bundle.overall = overall('scan-1', { coverage: 0.06 })
+    await s.saveScan(bundle)
+    expect((await s.getScanBundle('scan-1'))!.overall.coverage).toBe(0.06)
   })
 
   it('refuses to save the same scan twice (duplicate) and leaves the first untouched', async () => {
@@ -464,6 +520,78 @@ describe('saveScan is atomic', () => {
     vi.restoreAllMocks()
     expect(await dump(database)).toEqual(before)
     expect(await s.getBaselines()).toEqual({ F01: 0.42 })
+  })
+})
+
+describe('write failures are explained in plain words', () => {
+  const quota = () => new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+  const constraint = () => new DOMException('Key already exists in the object store.', 'ConstraintError')
+  const bulk = (...failures: Error[]) => new Dexie.BulkError('Some operations failed', { ...failures })
+
+  async function failWith(error: unknown, table: 'photos' | 'scores' | 'audit' | 'scans' = 'photos') {
+    const { database, s } = setup()
+    const spy = table === 'photos' || table === 'scores' ? vi.spyOn(database[table], 'bulkAdd') : vi.spyOn(database[table], 'add')
+    ;(spy as unknown as { mockRejectedValue(e: unknown): unknown }).mockRejectedValue(error)
+    const caught = await s.saveScan(makeBundle()).then(
+      () => null,
+      (e: unknown) => e,
+    )
+    vi.restoreAllMocks()
+    await expectNothingWritten(database)
+    return caught
+  }
+
+  it('a BulkError whose failure is a full disk says the storage is full, not that the scan is already saved', async () => {
+    const caught = await failWith(bulk(quota()))
+    expect(caught).toBeInstanceOf(StorageFullError)
+    expect(caught).toBeInstanceOf(StoreError)
+    expect(caught).toMatchObject({ name: 'StorageFullError', code: 'forbidden' })
+    expect((caught as Error).message).toBe('Not enough storage on this device. Free up space, or back up and delete old scans, then try again.')
+  })
+
+  it('a bare QuotaExceededError is the same plain message, from any table', async () => {
+    for (const table of ['photos', 'scores', 'audit', 'scans'] as const) {
+      const caught = await failWith(quota(), table)
+      expect(caught, table).toBeInstanceOf(StorageFullError)
+      expect((caught as StorageFullError).cause, table).toMatchObject({ name: 'QuotaExceededError' })
+    }
+  })
+
+  it('a quota error mixed in with constraint failures, or wrapped as the inner error of an abort, is still a full disk', async () => {
+    expect(await failWith(bulk(constraint(), quota()))).toBeInstanceOf(StorageFullError)
+    expect(await failWith(Object.assign(new Error('Transaction aborted'), { name: 'AbortError', inner: quota() }))).toBeInstanceOf(StorageFullError)
+    expect(await failWith(Object.assign(new Error('Write failed'), { cause: quota() }))).toBeInstanceOf(StorageFullError)
+  })
+
+  it('a BulkError of constraint failures only, or a bare constraint error, is a duplicate id', async () => {
+    for (const error of [bulk(constraint()), bulk(constraint(), constraint()), constraint()]) {
+      const caught = await failWith(error, 'scores')
+      expect(caught).toBeInstanceOf(StoreError)
+      expect(caught).toMatchObject({ code: 'duplicate', message: expect.stringMatching(/id that is already saved/) })
+    }
+    expect(await failWith(constraint(), 'scans')).toMatchObject({ code: 'duplicate' })
+  })
+
+  it('a BulkError with any other failure, or none at all, is not called a duplicate: it is rethrown unchanged', async () => {
+    for (const error of [bulk(constraint(), new Error('disk exploded')), bulk(new Error('disk exploded')), bulk()]) {
+      const caught = await failWith(error)
+      expect(caught).toBe(error)
+      expect(caught).not.toBeInstanceOf(StoreError)
+    }
+  })
+
+  it('anything else is rethrown unchanged', async () => {
+    const error = new Error('disk full')
+    expect(await failWith(error, 'audit')).toBe(error)
+  })
+
+  it('a real duplicate is still reported as one', async () => {
+    const { s, database } = setup()
+    await s.saveScan(makeBundle({ id: 'scan-1', takenAt: local(8), kind: 'weekly' }))
+    await expect(s.saveScan(makeBundle({ id: 'scan-2', takenAt: local(9), kind: 'weekly', photoId: 'scan-1-photo' }))).rejects.toMatchObject({
+      code: 'duplicate',
+    })
+    expect(await database.scans.count()).toBe(1)
   })
 })
 
@@ -566,6 +694,132 @@ describe('the data layer enforces the honesty invariants', () => {
     ['an impossible sleep value', (b) => (b.scan.conditions.hoursSlept = 30), 'invalid', /hoursSlept/],
     ['an unknown facial hair state', (b) => ((b.scan.conditions as Record<string, unknown>).facialHair = 'goatee'), 'invalid', /facialHair/],
     ['an unexpected bundle field', (b) => ((b as unknown as Record<string, unknown>).extra = 1), 'invalid', /does not store: "extra"/],
+
+    // A score is tied to the measurement it cites.
+    [
+      'a scored metric with no measurement row at all',
+      (b) => (b.measurements = b.measurements.filter((m) => m.metricId !== 'F05')),
+      'invalid',
+      /Score F05: this scan has no measurement for it/,
+    ],
+    [
+      'a measurement with no score row (a refused metric cannot vanish from the report)',
+      (b) => (b.scores = b.scores.filter((x) => x.metricId !== 'F10')),
+      'invalid',
+      /Measurement F10: has no score row/,
+    ],
+    [
+      'facts that cite a value the measurement does not have',
+      (b) => (scoreOf(b, 'F05').facts!.value = 99),
+      'invalid',
+      /Score F05: its facts cite 99 but the measurement is 1.62/,
+    ],
+    [
+      'facts in another unit than the measurement',
+      (b) => (scoreOf(b, 'F05').facts!.unit = 'mm'),
+      'invalid',
+      /facts use the unit "mm" but the measurement uses "ratio"/,
+    ],
+    ['facts with another uncertainty', (b) => (scoreOf(b, 'F05').facts!.uncertainty = 0.5), 'invalid', /uncertainty of 0.5 but the measurement has 0.03/],
+    [
+      'facts on an unscored row that cite a value for a refused measurement',
+      (b) => (scoreOf(b, 'F10').facts = facts()),
+      'invalid',
+      /Score F10: its facts cite 1.62 but the measurement is empty/,
+    ],
+    ['two photos for the same shot', (b) => b.photos.push(photo('scan-1', { id: 'second-front' })), 'invalid', /Photo for shot "frontal_neutral" appears more than once/],
+
+    // A reason says something, and does not hold a document.
+    ['a reason that is only a full stop', (b) => (scoreOf(b, 'F05').reason = '.'), 'invalid', /Score F05: the reason says nothing/],
+    ['a reason of a few letters', (b) => (scoreOf(b, 'F10').reason = 'no'), 'invalid', /Score F10: the reason says nothing/],
+    ['a reason with no letters', (b) => (scoreOf(b, 'F10').reason = '1234567890 1234'), 'invalid', /Score F10: the reason says nothing/],
+    ['a one-megabyte reason', (b) => (scoreOf(b, 'F05').reason = `F05 measured 1.62. ${'a'.repeat(1_000_000)}`), 'invalid', /Score F05: the reason is too long/],
+    [
+      'a scored reason that cites no number',
+      (b) => (scoreOf(b, 'F05').reason = 'The face is well proportioned and nothing is lost.'),
+      'invalid',
+      /Score F05: the reason cites no number/,
+    ],
+    ['a unit that is a paragraph', (b) => (measurementOf(b, 'F05').unit = 'x'.repeat(121)), 'invalid', /Measurement F05: unit is too long/],
+    ['a facts text field that is a paragraph', (b) => (scoreOf(b, 'F05').facts!.idealSummary = 'x'.repeat(501)), 'invalid', /facts.idealSummary is too long/],
+    [
+      'a refusal line that is a paragraph',
+      (b) => (measurementOf(b, 'F10').refusal!.recapture = ['x'.repeat(501)]),
+      'invalid',
+      /a refusal line is too long/,
+    ],
+    ['an id that is a paragraph', (b) => (b.scan.id = 'x'.repeat(129)), 'invalid', /Scan needs an id of 1 to 128 characters/],
+    ['an algoVersion that is a paragraph', (b) => (b.scan.algoVersion = 'x'.repeat(65)), 'invalid', /Scan needs an algoVersion/],
+    [
+      'a quality hint that is a paragraph',
+      (b) => (b.photos[0]!.qc.checks[0]!.hint = 'x'.repeat(501)),
+      'invalid',
+      /a qc check hint is too long/,
+    ],
+
+    // A baseline is the measured value of an unscored, confident, first measurement and nothing else.
+    [
+      'a baseline for a metric this scan never measured',
+      (b) => (b.baselinesToStore = [{ metricId: 'F99', value: 5 }]),
+      'invalid',
+      /Baseline F99: this scan did not measure it/,
+    ],
+    [
+      'a baseline for a refused metric',
+      (b) => (b.baselinesToStore = [{ metricId: 'F10', value: 7 }]),
+      'invalid',
+      /Baseline F10: its measurement was refused/,
+    ],
+    [
+      'a baseline that is not the measured value',
+      (b) => (b.baselinesToStore = [{ metricId: 'F01', value: 12345 }]),
+      'invalid',
+      /Baseline F01: the stored value 12345 is not the measured value 0.42/,
+    ],
+    [
+      'a baseline for a metric that was scored',
+      (b) => (b.baselinesToStore = [{ metricId: 'F05', value: 1.62 }]),
+      'invalid',
+      /Baseline F05: only a first measurement that was left unscored/,
+    ],
+    [
+      'a baseline from a LOW-confidence measurement',
+      (b) => (scoreOf(b, 'F01').confidence = { band: 'LOW', value: 0.3 }),
+      'invalid',
+      /Baseline F01: only a first measurement that was left unscored, with HIGH or MEDIUM confidence/,
+    ],
+
+    // The overall status is a function of coverage (docs/PLAN.md 4.4).
+    ...(
+      [
+        [0.5, 'FINAL', /50 % is PROVISIONAL, not FINAL/],
+        [0.6, 'FINAL', /60 % is PROVISIONAL, not FINAL/],
+        [0.74, 'FINAL', /74 % is PROVISIONAL, not FINAL/],
+        [0.75, 'PROVISIONAL', /75 % is FINAL, not PROVISIONAL/],
+        [0.9, 'PROVISIONAL', /90 % is FINAL, not PROVISIONAL/],
+        [0.5, 'NOT_AVAILABLE', /50 % is PROVISIONAL, not NOT_AVAILABLE/],
+        [0.9, 'NOT_AVAILABLE', /90 % is FINAL, not NOT_AVAILABLE/],
+      ] as const
+    ).map(
+      ([coverage, status, message]): [string, (b: ScanBundle) => void, string, RegExp] => [
+        `a ${status} overall at ${Math.trunc(coverage * 100)} % coverage`,
+        (b) => (b.overall = overall('scan-1', { coverage, status, weightsVersion: 'weights-0', appearance: 70, band: 3 })),
+        'invalid',
+        message,
+      ],
+    ),
+    [
+      'a coverage that is not the scored weight over the total weight',
+      (b) => (b.overall = overall('scan-1', { coverage: 0.3 })),
+      'invalid',
+      /coverage says 30.0 % but the scores carry 5.\d % of the total weight/,
+    ],
+    [
+      'a coverage that counts a LOW-confidence score',
+      (b) => (scoreOf(b, 'F05').confidence = { band: 'LOW', value: 0.3 }),
+      'invalid',
+      /coverage says 5.\d % but the scores carry 0.0 % of the total weight/,
+    ],
   ]
 
   it.each(cases)('rejects %s and writes nothing', async (_name, mutate, code, message) => {
@@ -653,6 +907,49 @@ describe('photos must be metadata-free re-encoded JPEGs', () => {
     bundle.photos[0]!.blob = jpegBlob(jpegBytes([ICC, ADOBE, [0xff]]))
     await s.saveScan(bundle)
     expect((await s.getScanBundle('scan-1'))!.photos).toHaveLength(1)
+  })
+
+  it('stores a fresh plain Blob: a File keeps no name or date, and the bytes written are the bytes that were checked', async () => {
+    const { database, s } = setup()
+    const bytes = jpegBytes([ICC])
+    const file = new File([bytes], 'IMG_1234 me at home.jpg', { type: 'image/jpeg', lastModified: 123 })
+    const bundle = makeBundle()
+    bundle.photos[0]!.blob = file
+    const write = vi.spyOn(database.photos, 'bulkAdd')
+    await s.saveScan(bundle)
+
+    // Look at what the store handed to IndexedDB: the fake one drops a File's name on its own, a real one does not.
+    const stored = (write.mock.calls[0]![0] as PhotoRecord[])[0]!.blob
+    expect(stored).not.toBe(file)
+    expect(stored instanceof File).toBe(false)
+    expect(stored.constructor).toBe(Blob)
+    expect('name' in stored).toBe(false)
+    expect('lastModified' in stored).toBe(false)
+    expect(stored.type).toBe('image/jpeg')
+    expect(Array.from(new Uint8Array(await stored.arrayBuffer()))).toEqual(Array.from(bytes))
+  })
+
+  it('works on a private copy: editing the bundle while the save is in flight changes nothing that is stored', async () => {
+    const { s } = setup()
+    const bundle = makeBundle()
+    const reason = scoreOf(bundle, 'F05').reason
+    const pending = s.saveScan(bundle)
+    scoreOf(bundle, 'F05').reason = ''
+    bundle.photos[0]!.blob = jpegBlob(jpegBytes([EXIF]))
+    bundle.baselinesToStore.push({ metricId: 'F99', value: 1 })
+    await pending
+
+    const loaded = (await s.getScanBundle('scan-1'))!
+    expect(scoreOf(loaded, 'F05').reason).toBe(reason)
+    expect(loaded.baselinesToStore).toEqual([{ metricId: 'F01', value: 0.42 }])
+    expect(findJpegMetadata(new Uint8Array(await loaded.photos[0]!.blob.arrayBuffer())).findings).toEqual([])
+  })
+
+  it('refuses data that cannot be copied (a function inside a record) as invalid, not as a crash', async () => {
+    const { database, s } = setup()
+    const bundle = makeBundle()
+    ;(bundle.scan.conditions as Record<string, unknown>).setup = () => 'phone_stand'
+    await expectRejected(database, s, bundle, 'invalid', /cannot be stored/)
   })
 
   it('findJpegMetadata walks segments instead of searching bytes', () => {
@@ -816,7 +1113,7 @@ describe('baselines are write-once per metric', () => {
     ])
     expect((await database.audit.orderBy('id').toArray()).map((a) => a.detail)).toEqual([
       'Saved weekly scan scan-1: 1 photo, 3 measurements, 3 scores, 1 new baseline',
-      'Saved weekly scan scan-2: 1 photo, 3 measurements, 3 scores, 1 new baseline',
+      'Saved weekly scan scan-2: 1 photo, 4 measurements, 4 scores, 1 new baseline',
     ])
     // A loaded bundle reports only the baselines that scan established.
     expect((await s.getScanBundle('scan-1'))!.baselinesToStore).toEqual([{ metricId: 'F01', value: 0.42 }])
@@ -852,7 +1149,7 @@ describe('deleteScan', () => {
     expect(await s.getScanBundle('scan-1')).toBeNull()
     expect((await s.listScans()).map((x) => x.id)).toEqual(['scan-2'])
     expect(await plain(await s.getScanBundle('scan-2'))).toEqual(keep)
-    expect(await counts(database)).toMatchObject({ scans: 1, photos: 1, measurements: 3, scores: 3, overall: 1, baselines: 2 })
+    expect(await counts(database)).toMatchObject({ scans: 1, photos: 1, measurements: 4, scores: 4, overall: 1, baselines: 2 })
     for (const name of ['photos', 'measurements', 'scores', 'overall'] as const) {
       const rows = (await database.table(name).toArray()) as { scanId: string }[]
       expect(rows.every((row) => row.scanId === 'scan-2'), name).toBe(true)
@@ -901,7 +1198,7 @@ describe('backup, delete-all and live queries cover the scan tables', () => {
     expect(summary.blobBytes).toBe(bytes.length)
 
     const b = setup()
-    await b.s.saveScan(makeBundle({ id: 'old-scan', takenAt: local(1), kind: 'weekly', photoId: 'old-photo', baselines: [{ metricId: 'F99', value: 9 }] }))
+    await b.s.saveScan(makeBundle({ id: 'old-scan', takenAt: local(1), kind: 'weekly', photoId: 'old-photo', baselines: [{ metricId: 'F08', value: 9 }] }))
     const restored = await restoreBackup(blob, PASS, b.database, { now: () => T0 + 1 })
     expect(restored.tables).toMatchObject({ scans: 1, photos: 1, measurements: 3, scores: 3, overall: 1, baselines: 1 })
 
@@ -965,5 +1262,165 @@ describe('backup, delete-all and live queries cover the scan tables', () => {
 
     stopList()
     stopBundle()
+  })
+})
+
+describe('the limits fit everything the catalog and the engine can produce', () => {
+  it('a scan with a measurement of every catalog metric, scored by the real engine, saves and reads back', async () => {
+    const { s } = setup()
+    const measurements = METRICS.map((metric, i) =>
+      measurement('big', metric.id, {
+        id: `big-m-${i}`,
+        value: (metric.ideal.male?.lo ?? 0) + 1,
+        unit: metric.scale.unit,
+        uncertainty: 0.1,
+        method: metric.methods[0]!,
+        qcFactor: 1,
+      }),
+    )
+    const { scores, overall: result, baselinesToStore } = scoreScan({ scanId: 'big', measurements, baselines: {} })
+    const bundle = makeBundle({ id: 'big', kind: 'weekly' })
+    Object.assign(bundle, { measurements, scores, overall: result, baselinesToStore, photos: [] })
+    await s.saveScan(bundle)
+    const loaded = (await s.getScanBundle('big'))!
+    expect(loaded.measurements).toHaveLength(METRICS.length)
+    expect(loaded.scores).toHaveLength(METRICS.length)
+    expect(loaded.scores.some((x) => x.score !== null)).toBe(true)
+    expect(Math.max(...METRICS.map((metric) => metric.scale.unit.length))).toBeLessThanOrEqual(120)
+  })
+})
+
+describe('a damaged scan is refused instead of rendered', () => {
+  async function saved() {
+    const env = setup()
+    await env.s.saveScan(makeBundle())
+    return env
+  }
+
+  // Rows put straight into the database stand in for anything that bypasses saveScan (a restored backup, a bug).
+  const tampering: [string, (d: LookmaxxingDB) => Promise<unknown>, RegExp][] = [
+    ['a score with no reason', (d) => d.scores.update('scan-1-s-F05', { reason: '' }), /Score F05: has an empty reason/],
+    ['a score with no facts', (d) => d.scores.update('scan-1-s-F05', { facts: null }), /Score F05: has a score but no facts/],
+    ['a score that cites another value', (d) => d.scores.update('scan-1-s-F05', { facts: facts({ value: 99 }) }), /its facts cite 99/],
+    ['a photo with Exif', (d) => d.photos.update('scan-1-photo', { blob: jpegBlob(jpegBytes([EXIF])) }), /APP1 Exif/],
+    ['a photo that is not a JPEG', (d) => d.photos.update('scan-1-photo', { blob: new Blob(['not an image'], { type: 'image/jpeg' }) }), /not a complete JPEG/],
+    ['a FINAL overall at 50 % coverage', (d) => d.overall.update('scan-1', { coverage: 0.5, status: 'FINAL', appearance: 61, band: 4, weightsVersion: 'weights-0' }), /is PROVISIONAL, not FINAL/],
+    ['a refused measurement that got a baseline', (d) => d.baselines.put({ metricId: 'F10', value: 7, setAt: T0, scanId: 'scan-1' }), /Baseline F10: its measurement was refused/],
+    ['a baseline that is not the measured value', (d) => d.baselines.update('F01', { value: 12345 }), /Baseline F01: the stored value 12345/],
+    ['a measurement that lost its score row', (d) => d.scores.delete('scan-1-s-F10'), /Measurement F10: has no score row/],
+  ]
+
+  it.each(tampering)('getScanBundle reports %s as damaged', async (_name, tamper, message) => {
+    const { database, s } = await saved()
+    await tamper(database)
+    const error = await s.getScanBundle('scan-1').then(
+      () => null,
+      (e: unknown) => e,
+    )
+    expect(error).toBeInstanceOf(StoreError)
+    expect(error).toMatchObject({ code: 'invalid', message: expect.stringMatching(/^Scan "scan-1" is damaged and cannot be shown \(/) })
+    expect((error as Error).message).toMatch(message)
+    expect((error as Error).message).toMatch(/Delete it from the history\.$/)
+  })
+
+  it('the history still lists a damaged scan and lets it be deleted', async () => {
+    const { database, s } = await saved()
+    await database.scores.update('scan-1-s-F05', { reason: '' })
+    expect((await s.listScans()).map((x) => x.id)).toEqual(['scan-1'])
+    await s.deleteScan('scan-1')
+    expect(await s.getScanBundle('scan-1')).toBeNull()
+  })
+
+  it('a good scan reads back clean, with its baselines, after the check', async () => {
+    const { s } = await saved()
+    expect((await s.getScanBundle('scan-1'))!.baselinesToStore).toEqual([{ metricId: 'F01', value: 0.42 }])
+  })
+
+  it('a backup carrying a reasonless score and an Exif photo never turns into a normal scan', async () => {
+    const a = await saved()
+    await a.database.scores.update('scan-1-s-F05', { reason: '' })
+    await a.database.photos.update('scan-1-photo', { blob: jpegBlob(jpegBytes([EXIF])) })
+    const { blob } = await exportBackup(PASS, a.database, { now: () => T0 })
+
+    const b = setup()
+    const outcome = await restoreBackup(blob, PASS, b.database, { now: () => T0 + 1 }).then(
+      () => null,
+      (e: unknown) => e,
+    )
+    // Either restore refuses the backup, or the restored scan is reported as damaged. A normal report is never an outcome.
+    if (outcome !== null) {
+      expect(outcome).toBeInstanceOf(BackupError)
+      expect(outcome).toMatchObject({ code: 'invalid_content' })
+    } else {
+      await expect(b.s.getScanBundle('scan-1')).rejects.toMatchObject({ code: 'invalid', message: expect.stringMatching(/damaged/) })
+    }
+  }, 60_000)
+})
+
+describe('verifyScanRows applies the save-time rules to raw table rows (the restore path)', () => {
+  type Rows = Parameters<typeof verifyScanRows>[0]
+  type Row = Record<string, unknown>
+  type TableRows = Record<keyof Rows, Row[]>
+  const rowWith = (list: Row[], key: string, value: unknown): Row => list.find((x) => x[key] === value)!
+
+  async function rowsOf(database: LookmaxxingDB): Promise<TableRows> {
+    const read = async (name: keyof Rows) => (await database.table(name).toArray()) as Row[]
+    return {
+      scans: await read('scans'),
+      photos: await read('photos'),
+      measurements: await read('measurements'),
+      scores: await read('scores'),
+      overall: await read('overall'),
+      baselines: await read('baselines'),
+    }
+  }
+
+  async function goodRows() {
+    const { database, s } = setup()
+    await s.saveScan(makeBundle({ id: 'scan-1', takenAt: local(8), kind: 'weekly' }))
+    await s.saveScan(makeBundle({ id: 'scan-2', takenAt: local(9), kind: 'weekly', baselines: [{ metricId: 'F07', value: 3.1 }] }))
+    return rowsOf(database)
+  }
+
+  it('accepts what saveScan wrote, and nothing at all', async () => {
+    await expect(verifyScanRows(await goodRows())).resolves.toBeUndefined()
+    await expect(verifyScanRows({})).resolves.toBeUndefined()
+  })
+
+  it('accepts a baseline whose scan was deleted: baselines outlive their scan', async () => {
+    const { database, s } = setup()
+    await s.saveScan(makeBundle({ id: 'scan-1', takenAt: local(8), kind: 'weekly' }))
+    await s.deleteScan('scan-1')
+    const rows = await rowsOf(database)
+    expect(rows.baselines).toHaveLength(1)
+    await expect(verifyScanRows(rows)).resolves.toBeUndefined()
+  })
+
+  const bad: [string, (rows: TableRows) => void, RegExp][] = [
+    ['a reasonless score', (r) => (rowWith(r.scores, 'id', 'scan-2-s-F05').reason = ''), /Scan "scan-2" is damaged.*Score F05: has an empty reason/],
+    ['a photo with Exif', (r) => (r.photos[0]!.blob = jpegBlob(jpegBytes([EXIF]))), /Scan "scan-1" is damaged.*APP1 Exif/],
+    ['a photo that is a named File', (r) => (r.photos[0]!.blob = new File([jpegBytes()], 'me.jpg', { type: 'image/jpeg' })), /named file/],
+    ['a photo of a scan that is not there', (r) => (r.photos[0]!.scanId = 'ghost'), /A photos row belongs to a scan that is not there/],
+    ['a measurement of a scan that is not there', (r) => (r.measurements[0]!.scanId = 'ghost'), /A measurements row belongs to a scan that is not there/],
+    ['a score row that is not an object', (r) => r.scores.push('junk' as unknown as Row), /A scores row belongs to a scan that is not there/],
+    ['a scan without its overall row', (r) => (r.overall = r.overall.filter((x) => x.scanId !== 'scan-1')), /Scan "scan-1" has no overall score row/],
+    ['two overall rows for one scan', (r) => r.overall.push({ ...r.overall[0]! }), /Scan "scan-1" has more than one overall score row/],
+    ['a scan listed twice', (r) => r.scans.push({ ...r.scans[0]! }), /Scan "scan-1" appears more than once/],
+    ['a scan with an unknown kind', (r) => (r.scans[0]!.kind = 'daily'), /unknown kind/],
+    ['a poisoned baseline', (r) => (rowWith(r.baselines, 'metricId', 'F07').value = 12345), /Baseline F07: the stored value 12345/],
+    ['a baseline row that is malformed', (r) => (r.baselines[0]!.value = NaN), /A baseline row is malformed/],
+    ['a baseline row with a field the app does not store', (r) => (r.baselines[0]!.note = 'mine'), /does not store: "note"/],
+  ]
+
+  it.each(bad)('rejects %s with StoreError invalid', async (_name, tamper, message) => {
+    const rows = await goodRows()
+    tamper(rows)
+    const error = await verifyScanRows(rows).then(
+      () => null,
+      (e: unknown) => e,
+    )
+    expect(error).toBeInstanceOf(StoreError)
+    expect(error).toMatchObject({ code: 'invalid' })
+    expect((error as Error).message).toMatch(message)
   })
 })

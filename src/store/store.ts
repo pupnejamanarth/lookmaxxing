@@ -125,6 +125,8 @@ const AUDIT_EVENTS: Record<AuditEvent, true> = {
   backup_exported: true,
   backup_restored: true,
   data_deleted: true,
+  scan_saved: true,
+  scan_deleted: true,
   network_blocked: true,
 }
 

@@ -260,6 +260,10 @@ const precached = checkServiceWorker()
 
 for (const f of files) {
   const r = relative(DIST, f).split(sep).join('/')
+  // The vendored MediaPipe/Emscripten runtime embeds dozens of inert URLs (comments, error strings). It is pinned by
+  // SHA-256 in scripts/vendor-mediapipe.mjs and the CSP (connect-src 'self') blocks any request; the patched
+  // JS library (mediapipe/vision_bundle_nometrics.js) is NOT exempt and is still scanned.
+  if (r.startsWith('mediapipe/wasm/')) continue
   if (TEXT_EXT.has(extname(f).toLowerCase())) {
     scanFile(f, allow, seenHosts)
     scanned++
