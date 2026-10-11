@@ -2,8 +2,8 @@ import Dexie from 'dexie'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ShotType } from '../../src/catalog/schema'
 import type { Measurement, MetricScore, OverallScore, PhotoRecord, ScanKind, ScoreFacts, ShotQc } from '../../src/domain/types'
-import { METRICS } from '../../src/catalog'
-import { WEIGHTS_VERSION, scoreScan } from '../../src/scoring'
+import { METRICS, getMetric, totalWeight } from '../../src/catalog'
+import { WEIGHTS_VERSION, computeOverall, scoreScan } from '../../src/scoring'
 import * as storeModule from '../../src/store'
 import { LookmaxxingDB, StoreError, createStore, watch } from '../../src/store'
 import { exportBackup, restoreBackup } from '../../src/store/backup'
@@ -184,6 +184,16 @@ function firstMeasurement(bundle: ScanBundle, { metricId, value }: BaselineToSto
   }
 }
 
+/** The headline numbers the engine would derive from these scores (the data layer recomputes them). */
+function recomputed(scores: MetricScore[], scanId: string): Pick<OverallScore, 'coverage' | 'pointsLost' | 'drag' | 'appearance' | 'band' | 'status'> {
+  const items = scores.flatMap((s) => {
+    const metric = getMetric(s.metricId)
+    return metric ? [{ metric, score: s, spread: null }] : []
+  })
+  const { coverage, pointsLost, drag, appearance, band, status } = computeOverall({ scanId, items })
+  return { coverage, pointsLost, drag, appearance, band, status }
+}
+
 /** F05 scored, F01 a first-scan baseline metric (not scored), F10 refused. Every baseline is backed by a measurement of its own. */
 function makeBundle(o: BundleOptions = {}): ScanBundle {
   const id = o.id ?? 'scan-1'
@@ -227,6 +237,7 @@ function makeBundle(o: BundleOptions = {}): ScanBundle {
     baselinesToStore: baselines,
   }
   for (const baseline of baselines) firstMeasurement(bundle, baseline)
+  bundle.overall = { ...bundle.overall, ...recomputed(bundle.scores, id) }
   return bundle
 }
 
@@ -458,12 +469,56 @@ describe('saveScan and getScanBundle', () => {
     const bundle = makeBundle()
     bundle.measurements.push(measurement('scan-1', 'F07'), measurement('scan-1', 'F08'))
     bundle.scores.push(
-      score('scan-1', 'F07', { facts: facts({ weight: 0.25 }), confidence: { band: 'HIGH', value: 0.9 } }),
-      score('scan-1', 'F08', { facts: facts({ weight: 0.25 }), confidence: { band: 'LOW', value: 0.3 } }),
+      score('scan-1', 'F07', { facts: facts({ weight: getMetric('F07')!.weight }), confidence: { band: 'HIGH', value: 0.9 } }),
+      score('scan-1', 'F08', { facts: facts({ weight: getMetric('F08')!.weight }), confidence: { band: 'LOW', value: 0.3 } }),
     )
-    bundle.overall = overall('scan-1', { coverage: 0.06 })
+    bundle.overall = { ...bundle.overall, ...recomputed(bundle.scores, 'scan-1') }
+    const withLow = bundle.overall.coverage
     await s.saveScan(bundle)
-    expect((await s.getScanBundle('scan-1'))!.overall.coverage).toBe(0.06)
+    expect((await s.getScanBundle('scan-1'))!.overall.coverage).toBe(withLow)
+    // F08 (LOW) is not in the coverage: F05 + F07 only.
+    const expected = (getMetric('F05')!.weight + getMetric('F07')!.weight) / totalWeight()
+    expect(withLow).toBeCloseTo(expected, 5)
+  })
+
+  describe('the overall score is recomputed from the scores (the catalog is the authority)', () => {
+    /** A real 70 % coverage bundle shape: F05 scored with its true weight, then headline numbers tampered with. */
+    const tampered = async (edit: (b: ScanBundle) => void, message: RegExp) => {
+      const { s, database } = setup()
+      const bundle = makeBundle()
+      edit(bundle)
+      await expectRejected(database, s, bundle, 'invalid', message)
+    }
+
+    it('rejects a forged facts.weight that inflates coverage', () =>
+      tampered((b) => {
+        scoreOf(b, 'F05').facts!.weight = 60
+        b.overall = { ...b.overall, coverage: 0.6125, status: 'PROVISIONAL', appearance: 99, band: 1 }
+      }, /facts carry a weight of 60 but the catalog weight is/))
+
+    it('rejects a forged appearance score', () =>
+      tampered((b) => {
+        // Score the whole catalog so coverage reaches FINAL, then lie about the headline only.
+        b.measurements = []
+        b.scores = []
+        b.baselinesToStore = []
+        for (const m of METRICS) {
+          b.measurements.push(measurement('scan-1', m.id))
+          b.scores.push(score('scan-1', m.id, { facts: facts({ weight: m.weight }), confidence: { band: 'HIGH', value: 0.9 } }))
+        }
+        const honest = recomputed(b.scores, 'scan-1')
+        b.overall = { ...b.overall, ...honest, appearance: Math.min(100, (honest.appearance ?? 0) + 1) }
+      }, /appearance says/))
+
+    it('rejects a LOW-confidence score counted in the coverage', () =>
+      tampered((b) => {
+        scoreOf(b, 'F05').confidence = { band: 'LOW', value: 0.3 }
+      }, /coverage says/))
+
+    it('rejects pointsLost that the scores do not give', () =>
+      tampered((b) => {
+        b.overall = { ...b.overall, pointsLost: { FIXED: 0, SURGICAL_OR_PROFESSIONAL: 0, CHANGEABLE: 40 } }
+      }, /pointsLost\.\w+ does not match/))
   })
 
   it('refuses to save the same scan twice (duplicate) and leaves the first untouched', async () => {
@@ -1422,5 +1477,15 @@ describe('verifyScanRows applies the save-time rules to raw table rows (the rest
     expect(error).toBeInstanceOf(StoreError)
     expect(error).toMatchObject({ code: 'invalid' })
     expect((error as Error).message).toMatch(message)
+  })
+})
+
+describe('the store barrel stays light', () => {
+  it('scans.ts loads the catalog and the scoring engine only through dynamic import()', async () => {
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync(new URL('../../src/store/scans.ts', import.meta.url), 'utf8')
+    expect(source).not.toMatch(/^import[^\n]*from '\.\.\/(catalog|scoring)'/m)
+    expect(source).toMatch(/import\('\.\.\/catalog'\)/)
+    expect(source).toMatch(/import\('\.\.\/scoring'\)/)
   })
 })

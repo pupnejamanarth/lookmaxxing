@@ -447,6 +447,40 @@ for (const suite of SUITES) {
       expect(['GPU', 'CPU']).toContain(started.delegate)
     })
 
+    // A phone takes a backgrounded page's WebGL context away (iOS Safari does). MediaPipe does not notice: its detect()
+    // then returns "no face" for ever, with no error. The detector has to notice and rebuild itself.
+    const lossCases: { name: string; options: { delegate: 'CPU' | 'GPU'; runningMode?: 'IMAGE' | 'VIDEO'; htmlCanvas?: boolean } }[] = [
+      { name: 'CPU delegate, OffscreenCanvas', options: { delegate: 'CPU' } },
+      { name: 'GPU delegate asked for', options: { delegate: 'GPU' } },
+      { name: 'VIDEO mode', options: { delegate: 'CPU', runningMode: 'VIDEO' } },
+      { name: 'no OffscreenCanvas (older Safari renders through a <canvas>)', options: { delegate: 'CPU', htmlCanvas: true } },
+    ]
+    for (const { name, options } of lossCases) {
+      test(`a lost WebGL context is recovered, twice in a row: ${name}`, async ({ page }) => {
+        test.setTimeout(90_000)
+        const { errors } = await open(page, suite)
+        const report = await page.evaluate(
+          ([url, o]) => (window as unknown as { vision: VisionHarness }).vision.contextLossRecovery(url, o),
+          [FIXTURE_URL, options] as const,
+        )
+        expect(report.foundBefore).toBe(true)
+        expect(report.rounds).toHaveLength(2)
+        for (const round of report.rounds) {
+          expect(round.taken, 'the test took a live context away').toBeGreaterThan(0)
+          // The loss is noticed quietly: a null for the frame in hand, not an exception and not a stale face.
+          expect(round.immediate).toEqual({ found: false, threw: null })
+          // ready() is where the app waits for a working detector, and after it the same face is found where it was.
+          expect(round.found).toBe(true)
+          expect(round.healthyNow, 'recovery built a new, live WebGL context').toBeGreaterThan(0)
+          expect(round.delegate).toBe('CPU') // after a loss the detector stays off the GPU
+          // Same face, same place: within what a different delegate (GPU before, CPU after) computes differently.
+          expect(Math.abs(round.noseTip!.x - report.noseTipBefore!.x)).toBeLessThan(3)
+          expect(Math.abs(round.noseTip!.y - report.noseTipBefore!.y)).toBeLessThan(3)
+        }
+        expect(errors).toEqual([])
+      })
+    }
+
     if (suite.production) {
       test('the page carries exactly the app\'s CSP, and the detector works under it', async ({ page }) => {
         await open(page, suite)

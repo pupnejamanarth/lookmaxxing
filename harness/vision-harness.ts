@@ -279,7 +279,98 @@ async function rawLibraryCloseProbe(): Promise<{ origin: string; kind: string }[
   return stats.recent.slice(Math.max(0, stats.recent.length - (stats.blockedCount - before))).map((r) => ({ origin: r.origin, kind: r.kind }))
 }
 
-const api = { analyse, analyseVideo, analyseBlank, rawLibraryCloseProbe, drawNamed, modelIntegrity, tryStart, closeAll, netStats: () => getNetGuardStats(), loadCanvas }
+type GlContext = WebGLRenderingContext | WebGL2RenderingContext
+
+/** Remembers every WebGL context created from now on (MediaPipe's own sits on a canvas nobody else can reach). */
+function recordContexts(): GlContext[] {
+  const seen: GlContext[] = []
+  const wrap = (proto: { getContext: (...args: unknown[]) => unknown } | undefined) => {
+    if (!proto) return
+    const original = proto.getContext
+    proto.getContext = function (this: unknown, type: unknown, ...rest: unknown[]) {
+      const context = original.call(this, type, ...rest) as GlContext | null
+      if (context && String(type).startsWith('webgl') && !seen.includes(context)) seen.push(context)
+      return context
+    }
+  }
+  wrap(HTMLCanvasElement.prototype as never)
+  wrap((window as unknown as { OffscreenCanvas?: { prototype: never } }).OffscreenCanvas?.prototype)
+  return seen
+}
+
+export interface LossRound {
+  /** Contexts that were healthy and have just been taken away, the way iOS does to a backgrounded page. */
+  taken: number
+  /** detect() right after the loss: must be a quiet null (the loss is noticed), never an exception or a stale face. */
+  immediate: { found: boolean; threw: string | null }
+  /** After `await detector.ready()`. */
+  found: boolean
+  delegate: string
+  noseTip: { x: number; y: number } | null
+  /** Contexts created since the loss that are alive now. */
+  healthyNow: number
+}
+
+export interface LossReport {
+  startedDelegate: string
+  foundBefore: boolean
+  noseTipBefore: { x: number; y: number } | null
+  rounds: LossRound[]
+}
+
+/**
+ * What a phone does to a page it backgrounds: the WebGL context MediaPipe renders with is taken away. Starts a detector,
+ * proves it sees the face, takes every live context away, and checks the detector notices and rebuilds itself — twice.
+ * With `htmlCanvas` the page has no OffscreenCanvas (older Safari), so MediaPipe renders through a <canvas> element.
+ */
+async function contextLossRecovery(
+  url: string,
+  options: { delegate: 'CPU' | 'GPU'; runningMode?: 'IMAGE' | 'VIDEO'; htmlCanvas?: boolean; rounds?: number },
+): Promise<LossReport> {
+  if (options.htmlCanvas) (window as unknown as { OffscreenCanvas?: unknown }).OffscreenCanvas = undefined
+  const contexts = recordContexts()
+  const detector = createFaceDetector({ delegate: options.delegate, runningMode: options.runningMode ?? 'IMAGE' })
+  try {
+    await detector.ready()
+    const canvas = await loadCanvas(url)
+    const stamp = () => (options.runningMode === 'VIDEO' ? performance.now() : undefined)
+    const before = detector.detect(canvas, stamp())
+    const report: LossReport = {
+      startedDelegate: detector.delegate,
+      foundBefore: before !== null,
+      noseTipBefore: before && { x: before.named.noseTip.x, y: before.named.noseTip.y },
+      rounds: [],
+    }
+    for (let round = 0; round < (options.rounds ?? 2); round++) {
+      const live = contexts.filter((gl) => !gl.isContextLost())
+      for (const gl of live) gl.getExtension('WEBGL_lose_context')?.loseContext()
+      const taken = live.filter((gl) => gl.isContextLost()).length
+      const known = contexts.length
+
+      let immediate: LossRound['immediate']
+      try {
+        immediate = { found: detector.detect(canvas, stamp()) !== null, threw: null }
+      } catch (error) {
+        immediate = { found: false, threw: (error as Error).message }
+      }
+      await detector.ready()
+      const frame = detector.detect(canvas, stamp())
+      report.rounds.push({
+        taken,
+        immediate,
+        found: frame !== null,
+        delegate: detector.delegate,
+        noseTip: frame && { x: frame.named.noseTip.x, y: frame.named.noseTip.y },
+        healthyNow: contexts.slice(known).filter((gl) => !gl.isContextLost()).length,
+      })
+    }
+    return report
+  } finally {
+    detector.close()
+  }
+}
+
+const api = { analyse, analyseVideo, analyseBlank, rawLibraryCloseProbe, drawNamed, modelIntegrity, tryStart, closeAll, contextLossRecovery, netStats: () => getNetGuardStats(), loadCanvas }
 export type VisionHarness = typeof api
 ;(window as unknown as { vision: VisionHarness }).vision = api
 status.textContent = 'ready'

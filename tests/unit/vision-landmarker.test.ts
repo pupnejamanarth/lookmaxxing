@@ -7,10 +7,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // Here it is replaced so the logic around it can be tested exactly: delegate fallback, timestamps, integrity,
 // the central crops and the way a result becomes a FaceFrame.
 
+/** What document.createElement('canvas') returns here: enough of a canvas for the detector, with a WebGL context that can be lost. */
+interface FakeCanvas {
+  width: number
+  height: number
+  isScratchCanvas: true
+  /** The state of its WebGL context: what gl.isContextLost() answers. */
+  lost: boolean
+  listeners: Map<string, Set<() => void>>
+  addEventListener(type: string, fn: () => void): void
+  removeEventListener(type: string, fn: () => void): void
+  getContext(type: string): unknown
+}
+
 interface FakeTask {
   delegate: string
   runningMode: string
   options: Record<string, unknown>
+  canvas: FakeCanvas
   detect: ReturnType<typeof vi.fn>
   detectForVideo: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
@@ -43,6 +57,7 @@ const fakeLibrary = {
         delegate,
         runningMode: options.runningMode,
         options: options as unknown as Record<string, unknown>,
+        canvas: (options as unknown as { canvas: FakeCanvas }).canvas,
         detect: vi.fn((image: unknown) => (lib.respond ? lib.respond(image) : lib.result)),
         detectForVideo: vi.fn((image: unknown) => (lib.respond ? lib.respond(image) : lib.result)),
         close: vi.fn(),
@@ -56,7 +71,9 @@ const fakeLibrary = {
 
 import { NAMED_POINTS } from '../../src/vision/types'
 import {
+  FaceDetectorLostError,
   LIBRARY_URL,
+  MAX_CONTEXT_LOSSES,
   MODEL_FILE,
   MODEL_URL,
   ModelIntegrityError,
@@ -121,6 +138,8 @@ let serve: () => Uint8Array
 /** drawImage calls made on the scratch canvas: [source, sx, sy, sw, sh, dx, dy, dw, dh]. */
 let drawn: unknown[][] = []
 let webgl2 = true
+let visibility = 'visible'
+const pageListeners = new Set<() => void>()
 
 beforeEach(() => {
   lib.tasks.length = 0
@@ -141,18 +160,42 @@ beforeEach(() => {
   drawn = []
   webgl2 = true
   vi.spyOn(library, 'load').mockImplementation(async () => fakeLibrary as unknown as Awaited<ReturnType<typeof library.load>>)
+  visibility = 'visible'
+  pageListeners.clear()
   vi.stubGlobal('document', {
-    createElement: () => ({
-      width: 0,
-      height: 0,
-      isScratchCanvas: true,
-      getContext: (type: string) =>
-        type === 'webgl2'
-          ? webgl2
-            ? { getExtension: () => null }
-            : null
-          : { drawImage: (...args: unknown[]) => drawn.push(args) },
-    }),
+    get visibilityState() {
+      return visibility
+    },
+    addEventListener: (type: string, fn: () => void) => {
+      if (type === 'visibilitychange') pageListeners.add(fn)
+    },
+    removeEventListener: (type: string, fn: () => void) => {
+      if (type === 'visibilitychange') pageListeners.delete(fn)
+    },
+    createElement: () => {
+      const canvas: FakeCanvas = {
+        width: 0,
+        height: 0,
+        isScratchCanvas: true,
+        lost: false,
+        listeners: new Map(),
+        addEventListener: (type, fn) => {
+          const set = canvas.listeners.get(type) ?? new Set()
+          set.add(fn)
+          canvas.listeners.set(type, set)
+        },
+        removeEventListener: (type, fn) => {
+          canvas.listeners.get(type)?.delete(fn)
+        },
+        getContext: (type: string) =>
+          type === 'webgl2'
+            ? webgl2
+              ? { getExtension: () => null, isContextLost: () => canvas.lost }
+              : null
+            : { drawImage: (...args: unknown[]) => drawn.push(args) },
+      }
+      return canvas
+    },
   })
 })
 
@@ -605,5 +648,283 @@ describe('createFaceDetector: running modes', () => {
     task.detectForVideo.mockClear()
     detector.detect(source(10, 10), 0)
     expect(task.detectForVideo.mock.calls[0]![1]).toBe(1)
+  })
+})
+
+// ───────────────────────────── a lost WebGL context ─────────────────────────────
+// A phone takes a backgrounded page's WebGL context away. MediaPipe does not notice: detect() then answers "no face" for
+// ever, with no error (reproduced in a real browser by tests/e2e/vision.spec.ts). The detector watches the canvas it
+// renders into and rebuilds itself on the CPU.
+
+describe('createFaceDetector: a lost WebGL context', () => {
+  const glCanvas = (task: FakeTask) => task.canvas
+  /** The browser took the context away and said so. */
+  const loseWithEvent = (canvas: FakeCanvas) => {
+    canvas.lost = true
+    for (const fn of [...(canvas.listeners.get('webglcontextlost') ?? [])]) fn()
+  }
+  /** The context is gone and nothing was delivered (a listener on a detached canvas sees nothing either). */
+  const loseSilently = (canvas: FakeCanvas) => {
+    canvas.lost = true
+  }
+  const visibilityChanged = (state: string) => {
+    visibility = state
+    for (const fn of [...pageListeners]) fn()
+  }
+  /** One macrotask: lets a rebuild that is waiting for something else (the page coming back) show that it did not start. */
+  const idle = () => new Promise<void>((resolve) => setImmediate(resolve))
+
+  async function started(options: { delegate?: 'GPU' | 'CPU'; runningMode?: 'IMAGE' | 'VIDEO' } = {}) {
+    lib.result = meshResult()
+    const detector = createFaceDetector(options)
+    await detector.ready()
+    expect(detector.detect(source(640, 480))).not.toBeNull()
+    return detector
+  }
+
+  it('renders into a canvas the detector owns and watches', async () => {
+    await started({ delegate: 'CPU' })
+    const canvas = glCanvas(tasks()[0]!)
+    expect(canvas).toBeDefined()
+    expect(canvas.listeners.get('webglcontextlost')?.size).toBe(1)
+    expect(pageListeners.size).toBe(1)
+  })
+
+  it('notices a lost context in detect(): a quiet null, the broken task is closed, and ready() waits for a CPU rebuild that works', async () => {
+    const detector = await started({ delegate: 'GPU' })
+    expect(detector.delegate).toBe('GPU')
+    const [broken] = tasks()
+    loseSilently(glCanvas(broken!))
+
+    expect(detector.detect(source(640, 480))).toBeNull() // not a throw, not a stale face
+    expect(detector.delegate).toBe('unknown') //            it no longer claims the GPU
+    expect(broken!.close).toHaveBeenCalledTimes(1)
+    expect(glCanvas(broken!).listeners.get('webglcontextlost')?.size).toBe(0)
+
+    await detector.ready()
+    expect(tasks().map((t) => t.delegate)).toEqual(['GPU', 'CPU']) // after a loss the detector stays off the GPU
+    expect(detector.delegate).toBe('CPU')
+    expect(glCanvas(tasks()[1]!)).not.toBe(glCanvas(broken!)) //    a new canvas, with a new context
+    expect(detector.detect(source(640, 480))).not.toBeNull()
+  })
+
+  it('a rebuild does not download or hash the model again, nor load the runtime again', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    loseSilently(glCanvas(tasks()[0]!))
+    detector.detect(source(640, 480))
+    await detector.ready()
+    expect(tasks()).toHaveLength(2)
+    expect(fetchCalls).toEqual([MODEL_URL])
+    expect(lib.filesetCalls).toHaveLength(1)
+    const [first, second] = tasks().map((t) => (t.options as { baseOptions: { modelAssetBuffer: Uint8Array } }).baseOptions.modelAssetBuffer)
+    expect(second).toBe(first)
+  })
+
+  it('the loss event alone starts the rebuild, with nobody calling detect()', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    loseWithEvent(glCanvas(tasks()[0]!))
+    expect(detector.delegate).toBe('unknown')
+    await detector.ready() // joins the rebuild the event started
+    expect(tasks()).toHaveLength(2)
+    expect(detector.delegate).toBe('CPU')
+    expect(detector.detect(source(640, 480))).not.toBeNull()
+  })
+
+  it('ready() itself checks the context first, so "await ready()" before a burst is enough', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    loseSilently(glCanvas(tasks()[0]!))
+    await detector.ready()
+    expect(tasks()).toHaveLength(2)
+    expect(detector.detect(source(640, 480))).not.toBeNull()
+  })
+
+  it('frames during the rebuild are null, and they do not start a second rebuild', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    loseSilently(glCanvas(tasks()[0]!))
+    for (let i = 0; i < 5; i++) expect(detector.detect(source(640, 480))).toBeNull()
+    await detector.ready()
+    expect(tasks()).toHaveLength(2)
+    expect(lib.filesetCalls).toHaveLength(1)
+  })
+
+  it('works in VIDEO mode and keeps the timestamps increasing across the rebuild', async () => {
+    lib.result = meshResult()
+    const detector = createFaceDetector({ delegate: 'CPU', runningMode: 'VIDEO' })
+    await detector.ready()
+    detector.detect(source(640, 480), 1000)
+    loseSilently(glCanvas(tasks()[0]!))
+    expect(detector.detect(source(640, 480), 1033)).toBeNull()
+    await detector.ready()
+    expect(detector.detect(source(640, 480), 900)).not.toBeNull() // the caller's clock went backwards meanwhile
+    const stamps = tasks()[1]!.detectForVideo.mock.calls.map((c) => c[1] as number)
+    expect(stamps.length).toBeGreaterThan(1)
+    expect(stamps.every((t, i) => i === 0 || t > stamps[i - 1]!)).toBe(true)
+    expect(stamps[0]!).toBeGreaterThan(1000)
+    expect(tasks()[1]!.runningMode).toBe('VIDEO')
+  })
+
+  it('a MediaPipe error on a lost context is a null and a rebuild; on a healthy context it is rethrown', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    const [first] = tasks()
+    first!.detect.mockImplementation(() => {
+      throw new Error('boom')
+    })
+    expect(() => detector.detect(source(640, 480))).toThrow('boom')
+    expect(tasks()).toHaveLength(1) // healthy: nothing was rebuilt
+
+    loseSilently(glCanvas(first!))
+    expect(detector.detect(source(640, 480))).toBeNull()
+    await detector.ready()
+    expect(tasks()).toHaveLength(2)
+  })
+
+  it('a "no face" from a context that was lost during the call is not "no face"', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    const canvas = glCanvas(tasks()[0]!)
+    lib.respond = () => {
+      canvas.lost = true // the context goes while MediaPipe is working
+      return { faceLandmarks: [], faceBlendshapes: [], facialTransformationMatrixes: [] }
+    }
+    expect(detector.detect(source(640, 480))).toBeNull()
+    expect(detector.delegate).toBe('unknown') // ...which is how this is told apart from an empty room
+    lib.respond = null
+    await detector.ready()
+    expect(tasks()).toHaveLength(2)
+  })
+
+  it('a context that is fine and a frame without a face change nothing', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    lib.result = { faceLandmarks: [], faceBlendshapes: [], facialTransformationMatrixes: [] }
+    for (let i = 0; i < 10; i++) expect(detector.detect(source(640, 480))).toBeNull()
+    expect(tasks()).toHaveLength(1)
+    expect(detector.delegate).toBe('CPU')
+  })
+
+  it(`gives up after ${MAX_CONTEXT_LOSSES} losses in a row with no face between them, says so, and ready() starts over`, async () => {
+    const detector = await started({ delegate: 'CPU' })
+    lib.result = { faceLandmarks: [], faceBlendshapes: [], facialTransformationMatrixes: [] } // nobody in front of the camera
+    for (let loss = 1; loss <= MAX_CONTEXT_LOSSES; loss++) {
+      loseSilently(glCanvas(tasks().at(-1)!))
+      expect(detector.detect(source(640, 480))).toBeNull()
+      await detector.ready()
+      expect(tasks()).toHaveLength(1 + loss)
+    }
+    loseSilently(glCanvas(tasks().at(-1)!))
+    const error = (() => {
+      try {
+        detector.detect(source(640, 480))
+      } catch (e) {
+        return e
+      }
+      return null
+    })()
+    expect(error).toBeInstanceOf(FaceDetectorLostError)
+    expect((error as Error).message).toMatch(/times in a row/)
+    expect(() => detector.detect(source(640, 480))).toThrow(FaceDetectorLostError) // and it keeps saying so
+    expect(tasks()).toHaveLength(1 + MAX_CONTEXT_LOSSES) // no further rebuild
+    expect(detector.delegate).toBe('unknown')
+
+    lib.result = meshResult()
+    await detector.ready() // an explicit retry
+    expect(tasks()).toHaveLength(2 + MAX_CONTEXT_LOSSES)
+    expect(detector.detect(source(640, 480))).not.toBeNull()
+  })
+
+  it('a face found between losses resets the count: a phone backgrounded many times keeps working', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    for (let loss = 0; loss < 3 * MAX_CONTEXT_LOSSES; loss++) {
+      loseSilently(glCanvas(tasks().at(-1)!))
+      detector.detect(source(640, 480))
+      await detector.ready()
+      expect(detector.detect(source(640, 480))).not.toBeNull()
+    }
+    expect(tasks()).toHaveLength(1 + 3 * MAX_CONTEXT_LOSSES)
+  })
+
+  it('a rebuild that fails is a FaceDetectorLostError with the cause, detect() says so too, and ready() tries again', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    lib.onCreate = () => {
+      throw new Error('GPU process crashed')
+    }
+    loseWithEvent(glCanvas(tasks()[0]!))
+    const failed = await detector.ready().catch((e: unknown) => e)
+    expect(failed).toBeInstanceOf(FaceDetectorLostError)
+    expect(((failed as Error).cause as Error).message).toBe('GPU process crashed')
+    expect(() => detector.detect(source(640, 480))).toThrow(FaceDetectorLostError)
+
+    lib.onCreate = null
+    await detector.ready()
+    expect(detector.detect(source(640, 480))).not.toBeNull()
+    expect(detector.delegate).toBe('CPU')
+  })
+
+  it('a loss while the page is in the background is rebuilt when it comes back, or when the app asks', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    visibility = 'hidden'
+    loseWithEvent(glCanvas(tasks()[0]!))
+    await idle()
+    expect(tasks()).toHaveLength(1) // nothing built for a page nobody is looking at
+    expect(detector.detect(source(640, 480))).toBeNull()
+    await idle()
+    expect(tasks()).toHaveLength(1)
+
+    visibilityChanged('visible')
+    await detector.ready()
+    expect(tasks()).toHaveLength(2)
+    expect(detector.detect(source(640, 480))).not.toBeNull()
+
+    // An explicit ready() is the app saying it needs a detector now, visible or not.
+    visibility = 'hidden'
+    loseWithEvent(glCanvas(tasks()[1]!))
+    await detector.ready()
+    expect(tasks()).toHaveLength(3)
+  })
+
+  it('coming back to the foreground notices a context that was lost in the background without any event', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    visibility = 'hidden'
+    loseSilently(glCanvas(tasks()[0]!))
+    visibilityChanged('hidden') // still hidden: nothing happens
+    await idle()
+    expect(tasks()).toHaveLength(1)
+    visibilityChanged('visible')
+    await detector.ready()
+    expect(tasks()).toHaveLength(2)
+    expect(detector.delegate).toBe('CPU')
+  })
+
+  it('a context that is lost while the detector is still starting fails that delegate, and the CPU is tried', async () => {
+    lib.decorate = (task) => {
+      const t = task as FakeTask
+      if (t.delegate === 'GPU') t.canvas.lost = true
+    }
+    const detector = createFaceDetector({ delegate: 'GPU' })
+    await detector.ready()
+    expect(tasks().map((t) => t.delegate)).toEqual(['GPU', 'CPU'])
+    expect(tasks()[0]!.close).toHaveBeenCalledTimes(1)
+    expect(detector.delegate).toBe('CPU')
+  })
+
+  it('close() during a rebuild leaves it closed, with nothing running and no listener behind', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    const canvas = glCanvas(tasks()[0]!)
+    loseWithEvent(canvas)
+    const rebuilding = detector.ready()
+    detector.close()
+    await expect(rebuilding).rejects.toThrow(/closed/)
+    for (const t of tasks()) expect(t.close).toHaveBeenCalled()
+    expect(() => detector.detect(source(640, 480))).toThrow(/closed/)
+    expect(pageListeners.size).toBe(0)
+    expect(canvas.listeners.get('webglcontextlost')?.size ?? 0).toBe(0)
+  })
+
+  it('close() removes what the detector registered', async () => {
+    const detector = await started({ delegate: 'CPU' })
+    const canvas = glCanvas(tasks()[0]!)
+    detector.close()
+    expect(pageListeners.size).toBe(0)
+    expect(canvas.listeners.get('webglcontextlost')?.size ?? 0).toBe(0)
+    visibilityChanged('visible') // nothing left to react
+    expect(tasks()).toHaveLength(1)
   })
 })

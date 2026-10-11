@@ -178,17 +178,19 @@ describe('personal_baseline rule (F01: no norm anchor)', () => {
     expect(same.baselineToStore).toBeUndefined()
     // Scale 0–100 → tau 15. 15 above the baseline: exp(−½) = 60.65 → 60. Either direction (target_range).
     expect(scoreMetric(f01(67), { baselines: { F01: 52 } }).score.score).toBe(60)
-    expect(scoreMetric(f01(37), { baselines: { F01: 52 } }).score.score).toBe(60)
+    // A leaner face is never penalised (no B02 target, no gaunt-face source).
+    expect(scoreMetric(f01(37), { baselines: { F01: 52 } }).score.score).toBe(100)
+    expect(scoreMetric(f01(0), { baselines: { F01: 52 } }).score.score).toBe(100)
     // 30 away: exp(−2) = 13.53 → 13.
     expect(scoreMetric(f01(82), { baselines: { F01: 52 } }).score.score).toBe(13)
   })
 
   it('cites the baseline, the change and the lack of a norm in the reason', () => {
     const { score } = scoreMetric(f01(67), { baselines: { F01: 52 }, uuid })
-    expect(score.facts).toMatchObject({ idealLo: 52, idealHi: 52, gap: 15, ruleKind: 'personal_baseline', pointsLost: 3.2 })
+    expect(score.facts).toMatchObject({ idealLo: null, idealHi: 52, gap: 15, ruleKind: 'personal_baseline', pointsLost: 3.2 })
     expect(lines(score)[1]).toContain('Reference: your own baseline 52 index')
     expect(lines(score)[1]).toContain('no population norm exists for this index')
-    expect(lines(score)[1]).toContain('15 index away from baseline → score 60.')
+    expect(lines(score)[1]).toContain('15 index worse than baseline → score 60.')
   })
 
   it('does not store a LOW-confidence value as the baseline', () => {

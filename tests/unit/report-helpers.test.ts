@@ -19,11 +19,15 @@ import {
   parseRefusalText,
   plainName,
   planNote,
+  SHOT_LABEL,
+  shotLabel,
   summariseScan,
   tallyCards,
   tallyText,
+  versionsText,
   type MetricCard,
 } from '../../src/routes/report/helpers'
+import { SHOT_TYPES } from '../../src/catalog/schema'
 
 // Synthetic records only. Metric ids are real catalog ids so names, weights and links resolve.
 
@@ -347,6 +351,35 @@ describe('re-capture summary', () => {
     expect(buildRecapture(cards)).toEqual([])
   })
 
+  it('leads each group with the capture checks that failed on the photo of that shot', () => {
+    const photo = {
+      shot: 'frontal_neutral' as const,
+      qc: qc({
+        framesKept: 0,
+        checks: [
+          { id: 'yaw', ok: true, value: 1, limit: 'within 3°', hint: 'Turn to face the lens' },
+          { id: 'distance', ok: false, value: 0.6, limit: '1.2–2.2 m from the lens', hint: 'Move back about 0.9 m (aim for 1.5 m).' },
+          { id: 'expression', ok: false, value: 0.4, limit: 'neutral face', hint: 'Relax your smile: lips lightly closed, no smile.' },
+        ],
+      }),
+    }
+    const groups = buildRecapture(sampleCards(), [photo])
+    expect(groups).toHaveLength(1)
+    expect(groups[0]!.failedChecks).toEqual([
+      { id: 'distance', label: 'Distance', ok: false, limit: '1.2–2.2 m from the lens', hint: 'Move back about 0.9 m (aim for 1.5 m).' },
+      { id: 'expression', label: 'Expression', ok: false, limit: 'neutral face', hint: 'Relax your smile: lips lightly closed, no smile.' },
+    ])
+    // The metric-level steps are still there.
+    expect(groups[0]!.steps.length).toBeGreaterThan(0)
+  })
+
+  it('ignores the photos of other shots, and a photo with no failed check adds nothing', () => {
+    const otherShot = { shot: 'profile_left' as const, qc: qc({ checks: [{ id: 'pitch', ok: false, value: 6, limit: 'within 4°', hint: 'Tilt' }] }) }
+    const clean = { shot: 'frontal_neutral' as const, qc: qc() }
+    expect(buildRecapture(sampleCards(), [otherShot])[0]!.failedChecks).toEqual([])
+    expect(buildRecapture(sampleCards(), [clean])[0]!.failedChecks).toEqual([])
+  })
+
   it('is empty when nothing was refused', () => {
     expect(buildRecapture(buildCards({ measurements: [measurement('F05')], scores: [score('F05')], baselinesToStore: [] }))).toEqual([])
   })
@@ -364,6 +397,15 @@ describe('overall view', () => {
     expect(v.coverageText).toBe('17% of the score is measurable from this scan, 50% is needed.')
     expect(v.explanation.join(' ')).toMatch(/only frontal-photo metrics/)
     expect(v.explanation.join(' ')).toMatch(/18% of the total weight at most/)
+  })
+
+  it('says plainly when nothing in the scan could be scored', () => {
+    const none = { total: 15, scored: 0, counted: 0, low: 0, refused: 15, baselineSet: 0, unscored: 0 }
+    const v = buildOverallView(overall({ coverage: 0 }), { attempted: 0.18, tally: none })
+    expect(v.explanation).toContain('No metric in this scan could be scored. The re-capture list below says what to change.')
+    expect(v.explanation).toContain('Left out of the coverage: 15 refused.')
+    const some = buildOverallView(overall({ coverage: 0.1 }), { attempted: 0.18, tally: { ...none, scored: 2, counted: 2, refused: 3 } })
+    expect(some.explanation.join(' ')).not.toMatch(/No metric in this scan could be scored/)
   })
 
   it('does not blame the build when the measured weight could have reached 50%', () => {
@@ -398,7 +440,7 @@ describe('overall view', () => {
   })
 
   it('shows CAI as provisional, and says plainly when it is not available', () => {
-    expect(buildOverallView(overall({ cai: 47.8 })).caiText).toBe('CAI: 47% – provisional – ceilings are not personalised yet.')
+    expect(buildOverallView(overall({ cai: 47.8 })).caiText).toBe('CAI: 47% (provisional – ceilings are not personalised yet).')
     expect(buildOverallView(overall({ cai: null })).caiText).toMatch(/^CAI: not available/)
   })
 
@@ -550,5 +592,20 @@ describe('conditions', () => {
       'stubble',
       'phone on a stand',
     ])
+  })
+})
+
+describe('version line', () => {
+  it('labels each id without repeating it', () => {
+    expect(versionsText({ weights: 'weights-1.0.0', ruleset: 'rules-1.0.0' })).toBe('Versions: weights weights-1.0.0, ruleset rules-1.0.0.')
+  })
+})
+
+describe('shot labels', () => {
+  it('has a plain label for every shot type the catalog knows', () => {
+    for (const shot of SHOT_TYPES) expect(SHOT_LABEL[shot], shot).toMatch(/^[A-Z][A-Za-z -]+$/)
+  })
+  it('falls back to words for an id this build does not know', () => {
+    expect(shotLabel('future_shot_type')).toBe('future shot type')
   })
 })

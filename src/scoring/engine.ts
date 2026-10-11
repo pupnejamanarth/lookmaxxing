@@ -201,17 +201,19 @@ export function evaluateMeasurement(m: Measurement, ctx: ScoreContext): Evaluati
         if (keep) evaluation.baselineToStore = { metricId: metric.id, value }
         return evaluation
       }
+      // No B02 target exists yet, and the catalog supports no gaunt-face penalty: a leaner F01 is never penalised.
+      const direction = metric.id === 'F01' && rule.direction === 'target_range' ? 'lower_better' : rule.direction
       const relative =
         baseline === undefined
           ? null
           : (() => {
               const tau = baselineTau({ scaleMin: metric.scale.min, scaleMax: metric.scale.max, baseline, uncertainty: m.uncertainty })
-              return (v: number) => personalBaselineScoreRaw(v, baseline, rule.direction, tau)
+              return (v: number) => personalBaselineScoreRaw(v, baseline, direction, tau)
             })()
       const anchored = anchor ? (v: number) => anchorScoreRaw(v, anchor) : null
       fn = relative && anchored ? (v) => combineBaselineAndAnchor(relative(v), anchored(v)) : (relative ?? anchored)!
-      band = anchor ? bandFromPoints(anchor) : baselineBand(baseline!, rule.direction)
-      if (baseline !== undefined) extra = { baseline: { value: baseline, direction: rule.direction, anchored: anchor !== undefined } }
+      band = anchor ? bandFromPoints(anchor) : baselineBand(baseline!, direction)
+      if (baseline !== undefined) extra = { baseline: { value: baseline, direction, anchored: anchor !== undefined } }
       break
     }
 

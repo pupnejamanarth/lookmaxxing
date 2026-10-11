@@ -129,6 +129,7 @@ describe('report built from a stored bundle', () => {
     expect(out).toContain('only frontal-photo metrics')
     expect(out).toContain('role="progressbar"')
     expect(out).toContain('CAI: not available')
+    expect(out).toContain('Versions: weights ')
     expect(out).not.toContain('rp-overall__value')
     expect(out).not.toContain('PROVISIONAL')
   })
@@ -148,7 +149,8 @@ describe('report built from a stored bundle', () => {
   it('renders a scored card with its score, confidence, evidence, changeability, weight, points lost and link', async () => {
     const card = buildCards(await savedBundle()).find((c) => c.metricId === 'F05')!
     const out = html(createElement(MetricCardView, { card }))
-    expect(out).toContain('aria-label="Score 46 out of 100"')
+    expect(out).toContain('Score 46 out of 100.')
+    expect(out).not.toMatch(/<p[^>]*aria-label/)
     expect(out).toMatch(/HIGH 0\.\d\d/)
     expect(out).toContain('MODERATE')
     expect(out).toContain('FIXED')
@@ -209,6 +211,16 @@ describe('report built from a stored bundle', () => {
     expect(out).toContain('F14 Nose width vs eye spacing; F15 Lip proportion')
   })
 
+  it('puts the failed photo checks in the re-capture summary, ahead of the steps', async () => {
+    const bundle = await savedBundle()
+    const cards = buildCards(bundle)
+    const out = html(createElement(RecaptureSummary, { cards, photos: bundle.photos }))
+    expect(out).toContain('Failed photo checks')
+    expect(out).toContain('<strong>Head pitch</strong> (limit within 4°). Tilt your chin down: ear canal level with the lower eyelid')
+    expect(out.indexOf('Failed photo checks')).toBeLessThan(out.indexOf('To re-capture'))
+    expect(out.indexOf('To re-capture')).toBeLessThan(out.indexOf('Ear canal level with lower eyelid.'))
+  })
+
   it('draws the drag chart from the stored overall, with a text alternative', async () => {
     const bundle = await savedBundle()
     const cards = buildCards(bundle)
@@ -247,7 +259,7 @@ describe('report built from a stored bundle', () => {
     expect(out).toContain('PROVISIONAL')
     expect(out).toContain('>61<')
     expect(out).toContain('± 3.4')
-    expect(out).toContain('CAI: 47% – provisional – ceilings are not personalised yet.')
+    expect(out).toContain('CAI: 47% (provisional – ceilings are not personalised yet).')
     expect(out).not.toContain('not available')
   })
 })

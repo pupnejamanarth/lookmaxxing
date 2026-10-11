@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ESLint } from 'eslint'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url))
@@ -67,6 +68,33 @@ describe('scripts/vendor-mediapipe.mjs', () => {
     expect(again.status, again.stderr).toBe(0)
     expect(readdirSync(join(cwd, 'public/mediapipe/wasm')).sort()).toEqual(SHIPPED)
   })
+
+  it('every generated .js file opens with the lint-off header and is otherwise the pinned file, and `eslint .` is clean once they exist', async () => {
+    const cwd = scratch()
+    symlinkSync(resolve(ROOT, 'node_modules'), join(cwd, 'node_modules'))
+    const result = run(cwd)
+    expect(result.status, result.stderr).toBe(0)
+
+    const header = '/* eslint-disable */\n'
+    const pkg = join(cwd, 'node_modules/@mediapipe/tasks-vision')
+    for (const name of SHIPPED.filter((n) => n.endsWith('.js'))) {
+      const shipped = readFileSync(join(cwd, 'public/mediapipe/wasm', name))
+      const original = readFileSync(join(pkg, 'wasm', name))
+      expect(shipped.subarray(0, header.length).toString('utf8'), name).toBe(header)
+      expect(shipped.subarray(header.length).equals(original), `${name} is the package's file after the header`).toBe(true)
+    }
+    for (const name of SHIPPED.filter((n) => n.endsWith('.wasm'))) {
+      expect(readFileSync(join(cwd, 'public/mediapipe/wasm', name)).equals(readFileSync(join(pkg, 'wasm', name))), `${name} is byte for byte the package's`).toBe(true)
+    }
+    expect(readFileSync(join(cwd, 'public/mediapipe/vision_bundle_nometrics.js'), 'utf8').startsWith(header)).toBe(true)
+
+    // `npm run lint` walks into public/ once this script has run (npm run dev / build do); the project's own ESLint config
+    // must find nothing to complain about in what was generated.
+    const eslint = new ESLint({ cwd, overrideConfigFile: resolve(ROOT, 'eslint.config.js') })
+    const results = await eslint.lintFiles(['public/mediapipe'])
+    expect(results.length).toBe(3)
+    expect(results.flatMap((r) => r.messages.map((m) => `${r.filePath}: ${m.ruleId}`)).slice(0, 5)).toEqual([])
+  }, 60_000)
 
   it('refuses a runtime whose bytes are not the pinned ones, and copies nothing', () => {
     const cwd = scratch()

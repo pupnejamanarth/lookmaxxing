@@ -105,7 +105,8 @@ export function bandFromPoints(points: readonly ScorePoint[]): Band {
  */
 export function baselineTau(args: { scaleMin: number | null; scaleMax: number | null; baseline: number; uncertainty: number | null }): number {
   const { scaleMin, scaleMax, baseline, uncertainty } = args
-  if (scaleMin !== null && scaleMax !== null && scaleMax > scaleMin) return BASELINE_TAU_SHARE * (scaleMax - scaleMin)
+  const noise = uncertainty !== null && uncertainty > 0 ? 3 * uncertainty : 0
+  if (scaleMin !== null && scaleMax !== null && scaleMax > scaleMin) return Math.max(BASELINE_TAU_SHARE * (scaleMax - scaleMin), noise)
   const fromBaseline = BASELINE_TAU_SHARE * Math.abs(baseline)
   if (fromBaseline > 1e-9) return fromBaseline
   if (uncertainty !== null && uncertainty > 0) return 3 * uncertainty

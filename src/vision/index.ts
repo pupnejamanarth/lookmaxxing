@@ -1,4 +1,4 @@
-export { createFaceDetector, ModelIntegrityError } from './landmarker'
+export { createFaceDetector, FaceDetectorLostError, ModelIntegrityError } from './landmarker'
 export type { FaceDetectorOptions } from './landmarker'
 export { namedPointsFromLandmarks } from './namedPoints'
 export { headPoseFromTransform } from './headPose'

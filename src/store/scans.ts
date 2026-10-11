@@ -27,7 +27,6 @@
  * was written). It is stricter than "no APP1 / APP13": only JFIF, ICC profile and Adobe colour-transform
  * segments are allowed through, so an unknown segment cannot carry personal data past it.
  */
-import { totalWeight } from '../catalog'
 import { METHODS, SHOT_TYPES } from '../catalog/schema'
 import type {
   ConfidenceBand,
@@ -40,7 +39,6 @@ import type {
   ScanRecord,
   ScoreFacts,
 } from '../domain/types'
-import { WEIGHTS_VERSION, countsTowardOverall, statusForCoverage } from '../scoring'
 import { db, type BaselineRow, type LookmaxxingDB } from './db'
 import { StoreError, type StoreDeps } from './store'
 
@@ -127,6 +125,23 @@ const MIN_REASON = 12
 const MAX_LIST = 64
 /** Coverage is stored rounded to 6 places, so the sum of the scored weights may differ by this much. */
 const COVERAGE_TOLERANCE = 1e-6
+
+/**
+ * The catalog and the scoring engine are large and only the scan screens need them, so they are loaded on demand
+ * (outside any IndexedDB transaction) and never statically imported: this module is part of the entry chunk.
+ */
+async function loadRules() {
+  const [catalog, scoring] = await Promise.all([import('../catalog'), import('../scoring')])
+  return {
+    getMetric: catalog.getMetric,
+    totalWeight: catalog.totalWeight,
+    WEIGHTS_VERSION: scoring.WEIGHTS_VERSION,
+    countsTowardOverall: scoring.countsTowardOverall,
+    statusForCoverage: scoring.statusForCoverage,
+    dragGroup: scoring.dragGroup,
+  }
+}
+type Rules = Awaited<ReturnType<typeof loadRules>>
 
 const invalid = (message: string) => new StoreError('invalid', message)
 
@@ -319,7 +334,7 @@ function validateScore(input: unknown, scanId: string): MetricScore {
   return s as unknown as MetricScore
 }
 
-function validateOverall(input: unknown, scanId: string): OverallScore {
+function validateOverall(input: unknown, scanId: string, rules: Rules): OverallScore {
   const o = record(input, 'Overall score', [
     'scanId', 'appearance', 'band', 'coverage', 'status', 'pointsLost', 'drag', 'cai', 'weightsVersion', 'rulesetVersion',
   ])
@@ -345,7 +360,7 @@ function validateOverall(input: unknown, scanId: string): OverallScore {
   }
   // docs/PLAN.md 4.4: the status is a function of coverage. A looser status would persist a FINAL score for a
   // provisional scan, or hide a result that exists.
-  const expected = statusForCoverage(o.coverage)
+  const expected = rules.statusForCoverage(o.coverage)
   if (o.status !== expected) {
     if (expected === 'NOT_AVAILABLE') {
       throw invalid(`Overall score: coverage is ${percent(o.coverage)}, below 50 %, so there is no overall score`)
@@ -423,30 +438,59 @@ function checkBaselines(baselines: BaselineToStore[], measurements: Measurement[
   }
 }
 
-/** Coverage is the scored (HIGH and MEDIUM) weight over the catalog's total weight, as docs/PLAN.md 4.4 says. */
-function checkCoverage(overall: OverallScore, scores: MetricScore[]): void {
+const EPS = 1e-9
+/** pointsLost is stored rounded to 6 places. */
+const POINTS_TOLERANCE = 1e-5
+
+/**
+ * The overall score is recomputed from the scores themselves (docs/PLAN.md 4.4), with the catalog as the authority for
+ * weights: a forged weight, a LOW score leaking into the average or a wrong headline number cannot persist.
+ */
+function checkOverallAgainstScores(overall: OverallScore, scores: MetricScore[], rules: Rules): void {
   // Weights change between releases; an older scan is judged by the weights it was scored with, which are not here.
-  if (overall.weightsVersion !== WEIGHTS_VERSION) return
+  if (overall.weightsVersion !== rules.WEIGHTS_VERSION) return
   let scoredWeight = 0
+  let weighted = 0
+  const lost: Record<string, number> = { FIXED: 0, SURGICAL_OR_PROFESSIONAL: 0, CHANGEABLE: 0 }
   for (const s of scores) {
-    if (s.score !== null && countsTowardOverall(s.confidence.band) && s.facts) scoredWeight += s.facts.weight
+    if (s.score === null || !rules.countsTowardOverall(s.confidence.band) || !s.facts) continue
+    const metric = rules.getMetric(s.metricId)
+    if (!metric) throw invalid(`Score ${s.metricId}: this metric is not in the catalog, so it cannot count toward the overall score`)
+    if (s.facts.weight !== metric.weight) {
+      throw invalid(`Score ${s.metricId}: its facts carry a weight of ${s.facts.weight} but the catalog weight is ${metric.weight}`)
+    }
+    scoredWeight += metric.weight
+    weighted += metric.weight * s.score
+    lost[rules.dragGroup(metric.changeability)]! += (metric.weight * (100 - s.score)) / 100
   }
-  const expected = scoredWeight / totalWeight()
+  const expected = scoredWeight / rules.totalWeight()
   if (Math.abs(expected - overall.coverage) > COVERAGE_TOLERANCE) {
     throw invalid(
       `Overall score: coverage says ${(overall.coverage * 100).toFixed(1)} % but the scores carry ${(expected * 100).toFixed(1)} % of the total weight`,
     )
   }
+  if (overall.status !== 'NOT_AVAILABLE') {
+    const appearance = Math.min(100, Math.floor(weighted / scoredWeight + EPS))
+    if (overall.appearance !== appearance) {
+      throw invalid(`Overall score: appearance says ${overall.appearance} but the weighted scores give ${appearance}`)
+    }
+  }
+  for (const group of Object.keys(lost)) {
+    if (Math.abs(overall.pointsLost[group as keyof OverallScore['pointsLost']] - lost[group]!) > POINTS_TOLERANCE) {
+      throw invalid(`Overall score: pointsLost.${group} does not match the scores`)
+    }
+  }
 }
 
 /** Shape, honesty and cross-record checks on plain data. Photo bytes are checked separately (they need async reads). */
-function checkBundle(input: unknown): ScanBundle {
+async function checkBundle(input: unknown): Promise<ScanBundle> {
+  const rules = await loadRules()
   const bundle = record(input, 'Scan bundle', ['scan', 'photos', 'measurements', 'scores', 'overall', 'baselinesToStore'])
   const scan = validateScan(bundle.scan)
   const photos = array(bundle.photos, 'photos', MAX_LIST).map((item) => validatePhoto(item, scan.id))
   const measurements = array(bundle.measurements, 'measurements', 512).map((item) => validateMeasurement(item, scan.id))
   const scores = array(bundle.scores, 'scores', 512).map((item) => validateScore(item, scan.id))
-  const overall = validateOverall(bundle.overall, scan.id)
+  const overall = validateOverall(bundle.overall, scan.id, rules)
   const baselinesToStore = validateBaselines(bundle.baselinesToStore)
 
   requireUnique(photos.map((p) => p.id), 'Photo id')
@@ -458,7 +502,7 @@ function checkBundle(input: unknown): ScanBundle {
 
   checkScoresAgainstMeasurements(measurements, scores)
   checkBaselines(baselinesToStore, measurements, scores)
-  checkCoverage(overall, scores)
+  checkOverallAgainstScores(overall, scores, rules)
   return { scan, photos, measurements, scores, overall, baselinesToStore }
 }
 
@@ -585,7 +629,7 @@ function detach<T>(value: T): T {
 /** Save-time rules over what was read back. Anything that fails is a damaged scan, never a normal report. */
 async function verifyStored(bundle: ScanBundle): Promise<void> {
   try {
-    const checked = checkBundle(bundle)
+    const checked = await checkBundle(bundle)
     for (const photo of checked.photos) {
       // saveScan never stores a File; one here came from outside and still carries a name and a date.
       if (typeof File !== 'undefined' && photo.blob instanceof File) {
@@ -724,8 +768,9 @@ export function createScansStore(database: LookmaxxingDB, deps: ScansDeps = {}):
 
   return {
     async saveScan(input) {
-      // Copy first (synchronously), validate the copy, write the copy.
-      const bundle = checkBundle(detach(input))
+      // Copy first (synchronously, before any await), validate the copy, write the copy.
+      const copy = detach(input)
+      const bundle = await checkBundle(copy)
       const photos = await storablePhotos(bundle.photos)
       const { scan, measurements, scores, overall, baselinesToStore } = bundle
       try {

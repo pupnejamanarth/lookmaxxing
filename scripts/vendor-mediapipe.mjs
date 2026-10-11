@@ -50,6 +50,14 @@ if (!existsSync(`${SRC}/wasm`)) {
 mkdirSync(WASM_DEST, { recursive: true })
 
 /**
+ * First line of every generated JavaScript file. These are third-party, minified or Emscripten-generated files that sit
+ * in public/ (so `eslint .` walks into them once this script has run: 1265 errors for code nobody here writes). The
+ * header silences ESLint for the file and changes nothing at run time. The pinned hashes below are of the package's
+ * files; what is written to public/ is this line followed by exactly those bytes.
+ */
+export const LINT_OFF = '/* eslint-disable */\n'
+
+/**
  * Writes only when the content differs, via a temp file + rename, so two npm scripts starting at once (the dev and the
  * preview server both run this as a pre-step) never see a half-written file, and an unchanged file is not touched.
  */
@@ -73,7 +81,7 @@ for (const [name, sha256] of Object.entries(WASM_FILES)) {
     console.error(`${from} does not match the pinned SHA-256 (expected ${sha256}, got ${actual}); not copied`)
     process.exit(1)
   }
-  place(`${WASM_DEST}/${name}`, data)
+  place(`${WASM_DEST}/${name}`, name.endsWith('.js') ? Buffer.concat([Buffer.from(LINT_OFF), data]) : data)
   bytes += data.length
 }
 
@@ -107,7 +115,7 @@ function patchBundle(source) {
     }
     out = out.replace(from, () => to)
   }
-  return `${out.trimEnd()}\nexport const ${METRICS_REMOVED_EXPORT}=!0;\n`
+  return `${LINT_OFF}${out.trimEnd()}\nexport const ${METRICS_REMOVED_EXPORT}=!0;\n`
 }
 
 {
