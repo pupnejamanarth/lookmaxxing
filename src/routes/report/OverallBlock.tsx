@@ -28,7 +28,11 @@ export function OverallBlock({ overall, attempted, tally }: Props) {
       </div>
 
       {view.available && view.numberText ? (
-        <p className="rp-overall__number" aria-label={`${view.headline}${view.bandText ? `, ${view.bandText}` : ''}`}>
+        <p className="rp-overall__number">
+          <span className="u-sr-only">
+            {view.headline}
+            {view.bandText ? `, ${view.bandText}` : ''}
+          </span>
           <span className="rp-overall__value" aria-hidden="true">
             {view.numberText}
           </span>

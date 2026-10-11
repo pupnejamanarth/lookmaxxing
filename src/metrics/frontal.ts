@@ -81,11 +81,12 @@ export function medianGeo(geos: readonly GeoInput[]): GeoInput {
 
 /**
  * Assumed landmark error (one standard deviation, per coordinate) as a fraction of the pupil distance. ASSUMPTIONS, not
- * measurements: the repeatability of this mesh on a still face is well under a pixel at the face sizes the protocol
- * produces (pupil distance about 60–130 px), and its placement against the true anatomy is several times worse, so the
- * figures are deliberately generous. A fraction of the pupil distance is the natural unit: the same fraction is the same
- * error in every ratio whatever the camera resolution. Replace them with the user's own measured repeatability once
- * calibration day (M2) exists.
+ * measurements, and nothing was measured to set them: they are typical-jitter figures for a face mesh fitted to a still
+ * photo, read as about a pixel at the face sizes the protocol produces (pupil distance about 60–130 px, so 0.5–2% of it),
+ * with the contour and chin points given more because the model slides along a contour that carries no landmark. They
+ * err on the generous side on purpose: a floor too small would show a precision the method does not have. A fraction of
+ * the pupil distance is the natural unit: the same fraction is the same error in every ratio whatever the camera
+ * resolution. Replace them with the user's own measured repeatability once calibration day (M2) exists.
  */
 export const LANDMARK_SIGMA_OF_IPD = {
   /** Iris centres and the pupil: a round, high-contrast target the model locks onto well. */
@@ -186,36 +187,49 @@ export interface Midline {
   u: Point2
 }
 
+/** One mirrored comparison: d = L − R and m = the midpoint of the pair. A midline landmark is a pair of itself (d = 0, m = the point). */
+interface PairItem {
+  dx: number
+  dy: number
+  mx: number
+  my: number
+}
+
 /**
- * The line that best mirrors the face onto itself: the one that minimises the sum of squared gaps |L − mirror(R)| over
- * all pairs, midline landmarks counting as pairs of themselves. With d = L − R and m = the pair's midpoint, a line with
- * direction u through c leaves the gap² (d·u)² + 4((m − c)·n)², n ⟂ u. The best c is the mean of the m, and the best u is
- * the eigenvector of the smaller eigenvalue of A + 4JᵀBJ, A = Σ d dᵀ, B = Σ (m − m̄)(m − m̄)ᵀ, J = a quarter turn.
- * The image centre or the pupil line are NOT used: a face turned slightly in the frame is mirrored about its own axis.
+ * Gap |L − mirror(R)| of one pair for the line through c with unit direction u. With d = L − R, m = the pair's midpoint and
+ * n ⟂ u the gap² is (d·u)² + 4((m − c)·n)²: the part of the pair's difference that runs ALONG the line, plus twice the
+ * distance of the pair's midpoint from the line. A midline landmark (d = 0) has a gap of twice its distance from the line.
  */
-export function bestFitMidline(pairs: readonly (readonly [Point2, Point2])[], axis: readonly Point2[]): Midline | null {
-  const items = [
-    ...pairs.map(([l, r]) => ({ dx: l.x - r.x, dy: l.y - r.y, mx: (l.x + r.x) / 2, my: (l.y + r.y) / 2 })),
-    ...axis.map((p) => ({ dx: 0, dy: 0, mx: p.x, my: p.y })),
-  ]
-  const n = items.length
-  if (n < 2) return null
-  const cx = items.reduce((s, i) => s + i.mx, 0) / n
-  const cy = items.reduce((s, i) => s + i.my, 0) / n
+function pairGap(item: PairItem, line: Midline): number {
+  const along = item.dx * line.u.x + item.dy * line.u.y
+  const across = (item.mx - line.c.x) * -line.u.y + (item.my - line.c.y) * line.u.x
+  return Math.hypot(along, 2 * across)
+}
+
+/**
+ * The line through the weighted mean of the midpoints whose direction minimises Σ wᵢ·gapᵢ². The best direction is the
+ * eigenvector of the smaller eigenvalue of A + 4JᵀBJ, A = Σ w d dᵀ, B = Σ w (m − m̄)(m − m̄)ᵀ, J = a quarter turn.
+ */
+function weightedMidline(items: readonly PairItem[], weights: readonly number[]): Midline | null {
+  const total = weights.reduce((s, w) => s + w, 0)
+  if (!(total > 0)) return null
+  const cx = items.reduce((s, i, k) => s + (weights[k] as number) * i.mx, 0) / total
+  const cy = items.reduce((s, i, k) => s + (weights[k] as number) * i.my, 0) / total
   let axx = 0
   let axy = 0
   let ayy = 0
   let bxx = 0
   let bxy = 0
   let byy = 0
-  for (const i of items) {
-    axx += i.dx * i.dx
-    axy += i.dx * i.dy
-    ayy += i.dy * i.dy
-    bxx += (i.mx - cx) ** 2
-    bxy += (i.mx - cx) * (i.my - cy)
-    byy += (i.my - cy) ** 2
-  }
+  items.forEach((i, k) => {
+    const w = weights[k] as number
+    axx += w * i.dx * i.dx
+    axy += w * i.dx * i.dy
+    ayy += w * i.dy * i.dy
+    bxx += w * (i.mx - cx) ** 2
+    bxy += w * (i.mx - cx) * (i.my - cy)
+    byy += w * (i.my - cy) ** 2
+  })
   // S = A + 4·JᵀBJ with JᵀBJ = [[byy, −bxy], [−bxy, bxx]]
   const a = axx + 4 * byy
   const b = axy - 4 * bxy
@@ -229,6 +243,49 @@ export function bestFitMidline(pairs: readonly (readonly [Point2, Point2])[], ax
   // A multiple of the identity: every direction fits equally; take the image vertical, the face's own axis.
   const u = len > 1e-12 ? { x: pick.x / len, y: pick.y / len } : { x: 0, y: 1 }
   return { c: { x: cx, y: cy }, u }
+}
+
+/** Iterations of the reweighting below; the objective is a handful of numbers, and it stops early once it stops moving. */
+const MIDLINE_MAX_ITERATIONS = 200
+/** Gaps smaller than this share of the data's extent are treated as equal when reweighting (keeps 1/gap finite). */
+const MIDLINE_GAP_FLOOR = 1e-7
+
+/**
+ * The line that best mirrors the face onto itself: the one that minimises the MEAN gap |L − mirror(R)| over all pairs,
+ * midline landmarks counting as pairs of themselves. That is the very number F05 reports, so the F05 value is the smallest
+ * mismatch any midline can give the landmarks, and one badly placed landmark cannot tilt the line and leak its mismatch
+ * into the others, as a least-squares line would (a least-squares line spreads one injected mismatch over every pair and
+ * inflates the mean gap by 1.7 to 1.9 times). The minimum is found by iteratively reweighted least squares, starting
+ * from the least-squares line (weights 1) and weighting each pair by 1/gap, which is exact for a perfectly symmetric
+ * set (all gaps zero) and converges to the L1 minimum otherwise. The result is never worse than the least-squares line.
+ * The image centre or the pupil line are NOT used: a face turned slightly in the frame is mirrored about its own axis.
+ */
+export function bestFitMidline(pairs: readonly (readonly [Point2, Point2])[], axis: readonly Point2[]): Midline | null {
+  const items: PairItem[] = [
+    ...pairs.map(([l, r]) => ({ dx: l.x - r.x, dy: l.y - r.y, mx: (l.x + r.x) / 2, my: (l.y + r.y) / 2 })),
+    ...axis.map((p) => ({ dx: 0, dy: 0, mx: p.x, my: p.y })),
+  ]
+  if (items.length < 2) return null
+  const extent = Math.max(...items.flatMap((i) => [Math.abs(i.dx), Math.abs(i.dy), Math.abs(i.mx), Math.abs(i.my)]))
+  const floor = Math.max(extent * MIDLINE_GAP_FLOOR, Number.MIN_VALUE)
+  const objective = (line: Midline): number => items.reduce((s, i) => s + pairGap(i, line), 0)
+
+  let best = weightedMidline(items, items.map(() => 1))
+  if (!best) return null
+  let bestObjective = objective(best)
+  for (let iteration = 0; iteration < MIDLINE_MAX_ITERATIONS; iteration++) {
+    const current: Midline = best
+    const next = weightedMidline(items, items.map((i) => 1 / Math.max(pairGap(i, current), floor)))
+    if (!next) break
+    const value = objective(next)
+    // Reweighting never makes the objective worse; no gain at all means it has converged.
+    if (!(value < bestObjective)) break
+    const gain = bestObjective - value
+    best = next
+    bestObjective = value
+    if (gain <= 1e-12 * Math.max(bestObjective, floor)) break
+  }
+  return best
 }
 
 /** The reflection of p across the line. */
@@ -567,7 +624,9 @@ export const FRONTAL_DEFS: Record<FrontalMetricId, FrontalDef> = {
   }),
   F12: def({
     id: 'F12',
-    uses: [...PUPILS, 'eyeInnerL', 'eyeInnerR', 'eyeOuterL', 'eyeOuterR'],
+    // The pupil line is the catalog's reference, but with the two eyes averaged its direction drops out of the value exactly
+    // (the left eye's angle gains what the right eye's loses when the reference turns), so the pupils never move this value.
+    uses: ['eyeInnerL', 'eyeInnerR', 'eyeOuterL', 'eyeOuterR'],
     implausible: 'the eye corners were out of order or collapsed',
     compute: canthalTilt,
   }),

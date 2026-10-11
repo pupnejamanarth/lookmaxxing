@@ -8,7 +8,7 @@ import { OverallBlock } from './report/OverallBlock'
 import { PhotoSection } from './report/PhotoSection'
 import { RecaptureSummary } from './report/RecaptureSummary'
 import { COPY } from './report/copy'
-import { attemptedShare, buildCards, describeConditions, groupCards, scanSubtitle, tallyCards, tallyText } from './report/helpers'
+import { attemptedShare, buildCards, describeConditions, groupCards, scanSubtitle, tallyCards, tallyText, versionsText } from './report/helpers'
 import './report/report.css'
 
 function ReportSkeleton() {
@@ -40,8 +40,10 @@ export default function Report({ id }: { id: string }) {
       <div className="u-stack u-stack--lg">
         <PageHeader title={COPY.reportTitle} back={{ to: '/scans', label: COPY.reportBack }} />
         <Banner tone="danger" title={COPY.reportLoadError} live>
-          {error.message}
+          <p>{error.message}</p>
+          <p>{COPY.reportLoadHelp}</p>
         </Banner>
+
       </div>
     )
   }
@@ -78,7 +80,7 @@ export default function Report({ id }: { id: string }) {
       {conditions.length > 0 ? <p className="u-dim u-small rp-conditions">Logged for this scan: {conditions.join(', ')}.</p> : null}
 
       <OverallBlock overall={overall} attempted={attemptedShare(measurements)} tally={tally} />
-      <RecaptureSummary cards={cards} />
+      <RecaptureSummary cards={cards} photos={photos} />
       <DragChart overall={overall} cards={cards} />
 
       <section className="rp-section" aria-labelledby="rp-metrics-h">
@@ -121,7 +123,7 @@ export default function Report({ id }: { id: string }) {
           <strong>{COPY.footerWeights}</strong> {COPY.footerWhy}
         </p>
         <p className="u-dim u-small u-num">
-          Algorithm {scan.algoVersion} · ruleset {overall.rulesetVersion} · weights {overall.weightsVersion}
+          {versionsText({ algorithm: scan.algoVersion, ruleset: overall.rulesetVersion, weights: overall.weightsVersion })}
         </p>
         <p>
           <Link to="/about">{COPY.footerLink}</Link>

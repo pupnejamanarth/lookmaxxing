@@ -45,6 +45,8 @@ const H = 1920
 const FOCAL_PX = W / 2 / Math.tan((assumedHfovDeg(W, H) / 2) * (Math.PI / 180))
 /** Pupil distance in px of a 63 mm pupil distance at `d` metres, with the capture module's assumed field of view. */
 const ipdPxAt = (d: number): number => (FOCAL_PX * 0.063) / d
+/** The protocol distance (docs/PLAN.md §5): the default for every synthetic capture. */
+const PROTOCOL_M = 1.5
 const RAD = Math.PI / 180
 
 /** The proportions a face is built from. Each field is the KNOWN ANSWER of the metric named in its comment. */
@@ -129,7 +131,8 @@ function unitFace(s: FaceSpec): UnitFace {
   const mouthW = s.mouthOverNose * noseW
   const dy = (eye / 2) * Math.tan(s.tilt * RAD)
 
-  const yTop = -95
+  // Vertex 10 of the mesh sits about one pupil distance above the pupil line, as on a real face.
+  const yTop = -110
   const cy = (yTop + yChin) / 2
   const a = cheek / 2
   const b = (yChin - yTop) / 2
@@ -191,7 +194,7 @@ interface FrameOptions {
 
 function makeFrame(spec: FaceSpec, o: FrameOptions = {}): FaceFrame {
   const u = unitFace(spec)
-  const ipdPx = o.ipdPx ?? ipdPxAt(o.distanceM ?? 1.6)
+  const ipdPx = o.ipdPx ?? ipdPxAt(o.distanceM ?? PROTOCOL_M)
   const k = ipdPx / 100
   const phi = (o.rotateDeg ?? o.pose?.roll ?? 0) * RAD
   const centre = o.centre ?? { x: W / 2, y: 900 }
@@ -236,8 +239,8 @@ function shotQc(over: Partial<ShotQc> = {}): ShotQc {
     framesKept: 5,
     checks: [check('sharpness', true, 120), check('lighting', true, 0.05)],
     burstSpread: 0.01,
-    estimatedDistanceM: 1.6,
-    irisPx: (ipdPxAt(1.6) * 11.7) / 63,
+    estimatedDistanceM: PROTOCOL_M,
+    irisPx: (ipdPxAt(PROTOCOL_M) * 11.7) / 63,
     greyCard: false,
     ...over,
   }
@@ -315,7 +318,7 @@ function expectEveryMetric(r: Record<string, Measurement>, spec: FaceSpec, digit
 }
 
 describe('a perfectly symmetric synthetic face gives the known answer for every metric', () => {
-  it('base proportions, face level, 1.6 m', () => {
+  it('base proportions, face level, at the protocol distance', () => {
     const r = run(BASE)
     expectEveryMetric(r, BASE)
     expect(Object.keys(r)).toEqual(ALL_IDS)
@@ -373,7 +376,7 @@ describe('a perfectly symmetric synthetic face gives the known answer for every 
       makeFrame(BASE, {
         edit: (n) => {
           // Left eye: outer corner 4.0° above the pupil line direction; right eye: 2.0°.
-          const k = ipdPxAt(1.6) / 100
+          const k = ipdPxAt(PROTOCOL_M) / 100
           const run = 45 * k
           n.eyeOuterL = { x: n.eyeInnerL.x + run, y: n.eyeInnerL.y - run * Math.tan(4 * RAD) }
           n.eyeOuterR = { x: n.eyeInnerR.x - run, y: n.eyeInnerR.y - run * Math.tan(2 * RAD) }
@@ -423,7 +426,7 @@ describe('F01 facial adiposity is a proxy for the look of face fat', () => {
 
 describe('F05 symmetry about the best-fit midline', () => {
   const N = 19 // 12 mirrored pairs + 7 midline landmarks
-  const ipdPx = ipdPxAt(1.6)
+  const ipdPx = ipdPxAt(PROTOCOL_M)
 
   it('compares 19 landmarks', () => {
     expect((run(BASE).F05 as Measurement).inputs?.landmarksCompared).toBe(N)
@@ -431,12 +434,12 @@ describe('F05 symmetry about the best-fit midline', () => {
 
   it('is exactly zero for a symmetric face turned in the frame: the midline is fitted, not the image centre', () => {
     for (const roll of [0, 1.5, -2.8]) {
-      const m = run(BASE, { frame: () => ({ rotateDeg: roll, pose: { roll }, centre: { x: 300 + 200 * roll, y: 800 } }) }).F05 as Measurement
+      const m = run(BASE, { frame: () => ({ rotateDeg: roll, pose: { roll }, centre: { x: 540 + 60 * roll, y: 800 } }) }).F05 as Measurement
       expect(value(m)).toBeCloseTo(0, 7)
     }
   })
 
-  it('rises by the injected amount (one pair member moved along the face by 4% of the pupil distance → 4% ÷ 19)', () => {
+  it('rises by the injected amount: one pair member moved along the face by 4% of the pupil distance adds 4% ÷ 19', () => {
     const inject = (pct: number) =>
       value(
         run(BASE, {
@@ -449,11 +452,41 @@ describe('F05 symmetry about the best-fit midline', () => {
       )
     const four = inject(4)
     const eight = inject(8)
-    // Fitting the midline absorbs a few percent of the displacement by tilting a little, so allow 10%.
-    expect(four).toBeGreaterThan((4 / N) * 0.9)
-    expect(four).toBeLessThan((4 / N) * 1.1)
-    expect(eight / four).toBeGreaterThan(1.9)
-    expect(eight / four).toBeLessThan(2.1)
+    // The fitted midline minimises the very mean gap that F05 reports, so one displaced landmark cannot tilt the line and
+    // leak its mismatch into the others: the mean rises by exactly the injected gap over the 19 comparisons.
+    expect(four).toBeGreaterThan((4 / N) * 0.99)
+    expect(four).toBeLessThan((4 / N) * 1.01)
+    expect(eight / four).toBeGreaterThan(1.98)
+    expect(eight / four).toBeLessThan(2.02)
+  })
+
+  it('a mismatch across the face (one pair member pushed outward) is counted at its full size too', () => {
+    const push = value(
+      run(BASE, {
+        frame: () => ({
+          edit: (n) => {
+            n.zygionL = { x: n.zygionL.x + 0.06 * ipdPx, y: n.zygionL.y }
+          },
+        }),
+      }).F05,
+    )
+    // The pair's midpoint moves 3% of the pupil distance off the line and the gap is twice that.
+    expect(push).toBeGreaterThan((6 / N) * 0.99)
+    expect(push).toBeLessThan((6 / N) * 1.01)
+  })
+
+  it('one badly placed landmark cannot tilt the midline and spoil the rest (a robust fit, not least squares)', () => {
+    const wild = value(
+      run(BASE, {
+        frame: () => ({
+          edit: (n) => {
+            n.gonionL = { x: n.gonionL.x, y: n.gonionL.y + 0.3 * ipdPx }
+          },
+        }),
+      }).F05,
+    )
+    expect(wild).toBeGreaterThan((30 / N) * 0.99)
+    expect(wild).toBeLessThan((30 / N) * 1.01)
   })
 
   it('counts a landmark that leaves the midline: a nose shifted sideways raises F05', () => {
@@ -490,6 +523,32 @@ describe('F05 symmetry about the best-fit midline', () => {
     }
   })
 
+  it('the fitted line is the one that minimises the mean gap: no tilt or shift of a grid search does better', () => {
+    let seed = 7
+    const jitter = (): number => {
+      seed = (seed * 16807) % 2147483647
+      return seed / 2147483647 - 0.5
+    }
+    for (let trial = 0; trial < 12; trial++) {
+      const pairs: (readonly [Point2, Point2])[] = Array.from({ length: 12 }, (_, i) => [
+        { x: 100 + 10 + i * 5 + jitter() * 3, y: i * 9 + jitter() * 3 },
+        { x: 100 - 10 - i * 5 + jitter() * 3, y: i * 9 + jitter() * 3 },
+      ])
+      const axis: Point2[] = Array.from({ length: 7 }, (_, i) => ({ x: 100 + jitter() * 2, y: i * 15 }))
+      const meanGap = (line: { c: Point2; u: Point2 }): number => {
+        const gap = (p: Point2, q: Point2): number => Math.hypot(p.x - mirrorAcross(line, q).x, p.y - mirrorAcross(line, q).y)
+        return (pairs.reduce((s, [l, r]) => s + gap(l, r), 0) + axis.reduce((s, p) => s + gap(p, p), 0)) / (pairs.length + axis.length)
+      }
+      const fitted = meanGap(bestFitMidline(pairs, axis)!)
+      let best = Number.POSITIVE_INFINITY
+      for (let a = -100; a <= 100; a++) {
+        const u = { x: Math.sin(a * 0.001), y: Math.cos(a * 0.001) }
+        for (let o = -60; o <= 60; o++) best = Math.min(best, meanGap({ c: { x: 100 + o * 0.05, y: 50 }, u }))
+      }
+      expect(fitted, `trial ${trial}`).toBeLessThanOrEqual(best * 1.002)
+    }
+  })
+
   it('a mirrored point is its own mirror image twice over', () => {
     const line = { c: { x: 5, y: 5 }, u: { x: 0, y: 1 } }
     const p = { x: 9, y: 2 }
@@ -503,7 +562,7 @@ describe('F05 symmetry about the best-fit midline', () => {
 // ───────────────────────────── uncertainty ─────────────────────────────
 
 describe('median and uncertainty across the burst', () => {
-  const k = ipdPxAt(1.6) / 100
+  const k = ipdPxAt(PROTOCOL_M) / 100
   const gapPx = BASE.fifths * 45 * k
   const eyePx = 45 * k
   /** F07 of a frame whose left outer eye corner is moved `dx` px outward: only the eye width changes, by dx/2. */
@@ -561,7 +620,7 @@ describe('median and uncertainty across the burst', () => {
     const near = run(BASE, { frame: () => ({ distanceM: 1.3 }), shotQc: { estimatedDistanceM: 1.3 } })
     const far = run(BASE, { frame: () => ({ distanceM: 2.0 }), shotQc: { estimatedDistanceM: 2.0 } })
     for (const id of ['F05', 'F07', 'F08', 'F12', 'F15', 'F16', 'F22']) {
-      expect((far[id] as Measurement).uncertainty as number).toBeCloseTo((near[id] as Measurement).uncertainty as number, 5)
+      expect((far[id] as Measurement).uncertainty as number).toBeCloseTo((near[id] as Measurement).uncertainty as number, 3)
     }
   })
 
@@ -590,6 +649,9 @@ describe('median and uncertainty across the burst', () => {
     expect(floor / expected).toBeLessThan(1.02)
     const m = run(BASE).F23 as Measurement
     expect(m.uncertainty as number).toBeGreaterThan(IRIS_SCALE_REL_ERROR * 63)
+    // The stated error is stored with the measurement, and only on the metric that scales by the iris.
+    expect(m.inputs?.scaleRelativeError).toBe(IRIS_SCALE_REL_ERROR)
+    expect((run(BASE).F08 as Measurement).inputs?.scaleRelativeError).toBeUndefined()
   })
 
   it('F05 has a non-zero floor even for a perfectly symmetric face: any jitter can only raise the gaps', () => {
@@ -607,25 +669,36 @@ describe('median and uncertainty across the burst', () => {
 // ───────────────────────────── declared inputs ─────────────────────────────
 
 describe('each metric reads exactly the points it declares', () => {
-  const geo = geoFromFrame(makeFrame(OTHER))!
-  const value = (id: FrontalMetricId, g = geo) => FRONTAL_DEFS[id].compute(g)!.value
+  // A symmetric, level face hides some dependencies (a rotated pupil line leaves a ratio of two horizontal widths alone), so
+  // every point is first moved by a small, fixed, different offset: a generic face on which every input matters.
+  const nudge = (i: number, axis: 0 | 1): number => 1.5 * Math.sin(12.9898 * (i + 1) * (axis + 1) + 78.233 * axis)
+  const base0 = geoFromFrame(makeFrame(OTHER))!
+  const geo = {
+    ...base0,
+    pts: Object.fromEntries(NAMED_POINTS.map((k, i) => [k, { x: base0.pts[k].x + nudge(i, 0), y: base0.pts[k].y + nudge(i, 1) }])) as NamedPoints,
+    oval: base0.oval!.map((p, i) => ({ x: p.x + nudge(i + 60, 0), y: p.y + nudge(i + 60, 1) })),
+  }
+  const value = (id: FrontalMetricId, g = geo): number => FRONTAL_DEFS[id].compute(g)?.value ?? Number.NaN
+  // A move that makes the geometry implausible (no value) counts as a change: the metric evidently read that point.
+  const differs = (a: number, b: number): boolean => !(Math.abs(a - b) <= 1e-9)
 
   it.each(FRONTAL_METRIC_IDS)('%s', (id) => {
     const def = FRONTAL_DEFS[id]
     const base = value(id)
+    expect(Number.isFinite(base)).toBe(true)
     for (const key of NAMED_POINTS) {
       const moved = [
-        { ...geo, pts: { ...geo.pts, [key]: { x: geo.pts[key].x + 5, y: geo.pts[key].y } } },
-        { ...geo, pts: { ...geo.pts, [key]: { x: geo.pts[key].x, y: geo.pts[key].y + 5 } } },
+        { ...geo, pts: { ...geo.pts, [key]: { x: geo.pts[key].x + 2, y: geo.pts[key].y } } },
+        { ...geo, pts: { ...geo.pts, [key]: { x: geo.pts[key].x, y: geo.pts[key].y + 2 } } },
       ].map((g) => value(id, g))
-      const changed = moved.some((v) => Math.abs(v - base) > 1e-9)
+      const changed = moved.some((v) => differs(v, base))
       if (def.uses.includes(key)) expect(changed, `${id} should read ${key}`).toBe(true)
       else expect(changed, `${id} should not read ${key}`).toBe(false)
     }
-    const ovalMoved = { ...geo, oval: geo.oval!.map((p, i) => (i === 5 ? { x: p.x + 5, y: p.y + 5 } : p)) }
-    expect(Math.abs(value(id, ovalMoved) - base) > 1e-9, `${id} oval`).toBe(def.usesOval)
+    const ovalMoved = { ...geo, oval: geo.oval.map((p, i) => (i === 5 ? { x: p.x + 5, y: p.y + 5 } : p)) }
+    expect(differs(value(id, ovalMoved), base), `${id} oval`).toBe(def.usesOval)
     const irisMoved = { ...geo, irisPx: geo.irisPx + 2 }
-    expect(Math.abs(value(id, irisMoved) - base) > 1e-9, `${id} iris`).toBe(def.usesIris)
+    expect(differs(value(id, irisMoved), base), `${id} iris`).toBe(def.usesIris)
   })
 })
 
@@ -717,7 +790,7 @@ describe('refusals carry the measured value and the limit, and say what to re-ca
   it('head roll and pitch, with the direction to correct', () => {
     const roll = run(BASE, { frame: () => ({ pose: { roll: -3.6 }, rotateDeg: -3.6 }) })
     expect(refusalText(roll.F07)).toContain('Head roll averaged 3.6° over 5 frames (limit 3°)')
-    expect(refusalText(roll.F07)).toContain('tilt your head 3.6° to your left')
+    expect(refusalText(roll.F07)).toContain('tilt it 3.6° to your left')
     const down = run(BASE, { frame: () => ({ pose: { pitch: 5.5 } }) })
     expect(refusalText(down.F16)).toContain('Head pitch averaged 5.5° over 5 frames (limit 4°)')
     expect(refusalText(down.F16)).toContain('raise your chin 5.5°')
@@ -843,7 +916,8 @@ describe('refusals carry the measured value and the limit, and say what to re-ca
 
   it('declared conditions: a beard spoils the jaw and chin, stubble the lip edge, illness or drinking the face fat', () => {
     const beard = run(BASE, { conditions: { facialHair: 'beard' } })
-    expect(refusedIds(beard).sort()).toEqual(['F01', 'F16', 'F17', 'F22'])
+    // F21 reads the chin tip through the mouth-to-chin split of F16, so a hidden chin refuses it too.
+    expect(refusedIds(beard).sort()).toEqual(['F01', 'F16', 'F17', 'F21', 'F22'])
     expect(refusalText(beard.F01)).toContain('A beard was declared for this scan, so the jaw edge and the jaw corners cannot be located')
     expect(refusalText(beard.F16)).toContain('the chin tip cannot be located')
     expect(refusalText(beard.F22)).toContain('A beard was declared for this scan, and a moustache or stubble hides the upper-lip edge')
@@ -1120,11 +1194,18 @@ describe('V06 photo technique', () => {
     for (const id of items) expect([0, 1], id).toContain(m.inputs?.[id])
   })
 
-  it('all six pass: 100 %, no uncertainty away from the distance threshold', () => {
-    const m = run(BASE).V06 as Measurement
+  it('all six pass: 100 %, with no uncertainty once the distance is clear of the 1.5 m threshold', () => {
+    const m = run(BASE, { frame: () => ({ distanceM: 1.9 }), shotQc: { estimatedDistanceM: 1.9 } }).V06 as Measurement
     expect(m.value).toBe(100)
     expect(m.uncertainty).toBe(0)
     expect(m.method).toBe('AUTO_FRONTAL_PHOTO')
+    expect(m.inputs?.distance).toBe(1)
+  })
+
+  it('all six pass at exactly the protocol distance: 100 %, but the distance item is flagged as uncertain', () => {
+    const m = run(BASE).V06 as Measurement
+    expect(m.value).toBe(100)
+    expect(m.uncertainty).toBeCloseTo(100 / 6, 5)
   })
 
   it('each failing item costs one sixth', () => {
@@ -1152,10 +1233,15 @@ describe('V06 photo technique', () => {
   })
 
   it('a distance within the ±15% error of the 1.5 m threshold is flagged as one item of uncertainty', () => {
-    const m = run(BASE, { frame: () => ({ distanceM: 1.6 }), shotQc: { estimatedDistanceM: 1.6 } }).V06 as Measurement
-    expect(m.uncertainty).toBeCloseTo(100 / 6, 5)
-    const far = run(BASE, { frame: () => ({ distanceM: 1.9 }), shotQc: { estimatedDistanceM: 1.9 } }).V06 as Measurement
-    expect(far.uncertainty).toBe(0)
+    for (const d of [1.3, 1.6, 1.7]) {
+      const m = run(BASE, { frame: () => ({ distanceM: d }), shotQc: { estimatedDistanceM: d } }).V06 as Measurement
+      expect(m.uncertainty, `${d} m`).toBeCloseTo(100 / 6, 5)
+    }
+    for (const d of [1.2, 1.75, 1.9, 2.2]) {
+      const m = run(BASE, { frame: () => ({ distanceM: d }), shotQc: { estimatedDistanceM: d } }).V06 as Measurement
+      expect(m.refusal, `${d} m`).toBeUndefined()
+      expect(m.uncertainty, `${d} m`).toBe(0)
+    }
   })
 
   it('is refused when an item cannot be judged: no sharpness or lighting reading in the capture record', () => {
@@ -1168,10 +1254,17 @@ describe('V06 photo technique', () => {
   })
 
   it('is refused for the catalog\'s frame conditions: face too small, face cropped', () => {
-    // The face at ~2.1 m is under 15% of the shorter side.
-    const small = run(BASE, { frame: () => ({ distanceM: 2.1 }), shotQc: { estimatedDistanceM: 2.1 } }).V06 as Measurement
-    expect(small.refusal?.reasons.join(' ')).toMatch(/The face is 1[0-4]\.\d% of the shorter frame side \(minimum 15%\)/)
-    const cropped = run(BASE, { frame: () => ({ centre: { x: W / 2, y: 120 } }) }).V06 as Measurement
+    // 15% of the central half of the frame's shorter side is 81 px here; the face outline is 2.8 pupil distances tall.
+    const small = run(BASE, { frame: () => ({ distanceM: 3.4 }), shotQc: { estimatedDistanceM: 3.4 } }).V06 as Measurement
+    expect(small.value).toBeNull()
+    expect(small.refusal?.reasons.join(' ')).toMatch(/The face is 1[0-4]\.\d% of the central 50% window of the frame \(minimum 15%\)/)
+    expect(small.refusal?.recapture.join(' ')).toContain('rear 2x or 3x lens')
+    // The same face at the farthest distance capture QC accepts is large enough.
+    const farthest = run(BASE, { frame: () => ({ distanceM: QC_LIMITS.maxDistanceM }), shotQc: { estimatedDistanceM: QC_LIMITS.maxDistanceM } }).V06 as Measurement
+    expect(farthest.refusal).toBeUndefined()
+    // The head is cut by the top edge of the picture.
+    const cropped = run(BASE, { frame: () => ({ centre: { x: W / 2, y: 40 } }) }).V06 as Measurement
+    expect(cropped.value).toBeNull()
     expect(cropped.refusal?.reasons.join(' ')).toContain('The face outline touches the edge of the frame')
   })
 

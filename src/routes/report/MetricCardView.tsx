@@ -33,7 +33,10 @@ function ScoreFigure({ card }: { card: MetricCard }) {
     )
   }
   return (
-    <p className="rp-score" aria-label={`Score ${card.scoreText} out of 100`}>
+    <p className="rp-score">
+      <span className="u-sr-only">
+        Score {card.scoreText} out of 100.
+      </span>
       <span className="rp-score__num" aria-hidden="true">
         {card.scoreText}
       </span>

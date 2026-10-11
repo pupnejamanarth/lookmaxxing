@@ -19,10 +19,12 @@ export const COPY = {
   reportNotFoundTitle: 'Scan not found',
   reportNotFoundText: 'This scan does not exist on this device. It may have been deleted.',
   reportLoadError: 'This scan could not be read from this device.',
+  reportLoadHelp: 'Its stored data is damaged or incomplete. It can still be deleted from the scan history.',
 
   overallNotAvailable: 'Overall score: not available',
   overallNotAvailableWhy: 'No number is shown: a number built from this little of the model would be made up.',
   overallThresholdLabel: '50% needed for an overall score',
+  overallNothingScored: 'No metric in this scan could be scored. The re-capture list below says what to change.',
   overallProvisionalNote: 'Provisional: less than 75% of the total weight was scored, so the number can move a lot when more is measured.',
   overallBuildScope:
     'This build measures only frontal-photo metrics. Profile, body, skin and hair metrics are not measured yet, so most of the model has no input.',
@@ -32,6 +34,8 @@ export const COPY = {
 
   recaptureTitle: 'What to re-capture',
   recaptureIntro: 'These metrics were refused because the photo could not support a number. Fix these, then scan again.',
+  recaptureFailedChecks: 'Failed photo checks',
+  recaptureSteps: 'To re-capture',
   recaptureIgnored: 'also refused, but they carry no weight, so a re-capture for them alone changes nothing.',
 
   dragTitle: 'Points lost',

@@ -135,14 +135,30 @@ function measureFrontal(id: FrontalMetricId, diag: ScanDiagnostics, base: Base, 
     uncertainty: combined.uncertainty,
     nFrames: combined.nFrames,
     qcFactor: qcFactorFor(profile, diag),
-    inputs: cleanInputs({ ...captureInputs(diag), ...combined.inputs, valueSpread: combined.spread, landmarkFloor: combined.floor }),
+    inputs: cleanInputs({
+      ...captureInputs(diag),
+      ...combined.inputs,
+      valueSpread: combined.spread,
+      landmarkFloor: combined.floor,
+      // F23 only: the published error of scaling pixels to millimetres by the iris, included in the floor above.
+      scaleRelativeError: def.methodRelError > 0 ? def.methodRelError : null,
+    }),
   }
 }
 
 // ───────────────────────────── V06 photo technique ─────────────────────────────
 
-/** Catalog V06: the face is smaller than 15% of the frame. Read here as 15% of the SHORTER frame side (see photoTechnique). */
-export const MIN_FACE_SHARE_OF_SHORT_SIDE = 0.15
+/**
+ * Catalog V06 refuses "a face smaller than 15% of the frame". No literal reading survives the capture protocol: a head
+ * photographed from the protocol 1.5 m with a phone's 1x lens fills about 1-2% of the frame's AREA and 9-10% of its longer
+ * side, and even its height over the SHORTER side is only about 17% in a 9:16 frame and 13% in a 3:4 frame, so a 15% limit
+ * would refuse every correct capture. The protocol already puts the face inside the central 50% of the frame, so the limit
+ * is applied to that window: the face outline's height must be at least 15% of the window's shorter side, which is 7.5% of
+ * the frame's shorter side. Across the whole distance range capture QC accepts (up to 2.2 m) a real face stays above it
+ * (about 8.6% of the shorter side in a 3:4 frame at 2.2 m); it refuses a face that is too small for the mesh to be placed
+ * on, which is the point of the catalog's condition.
+ */
+export const MIN_FACE_SHARE_OF_CENTRAL_WINDOW = 0.15
 /** Catalog V06 checklist item `distance`: at least 1.5 m (an app design choice, estimated from landmarks). */
 export const TECHNIQUE_MIN_DISTANCE_M = QC_LIMITS.targetDistanceM
 
@@ -154,8 +170,8 @@ export const TECHNIQUE_MIN_DISTANCE_M = QC_LIMITS.targetDistanceM
  *
  * Refused (no value) when an item cannot be judged, or for the catalog's refusal conditions that can be read from a
  * frame: no landmark scale for the distance, a face under 15% of the frame, a face cropped at the edge. "Of the frame" is
- * read as the face height over the shorter frame side: as a share of the area it would refuse every shot taken at the
- * protocol distance. A screenshot or a beauty filter cannot be detected from the mesh and is not checked.
+ * read as in MIN_FACE_SHARE_OF_CENTRAL_WINDOW. A screenshot or a beauty filter cannot be detected from the mesh and is
+ * not checked.
  *
  * Uncertainty is one checklist item (100 ÷ items) when the distance sits within the ±15% error of the iris-based estimate
  * of the 1.5 m threshold, since the estimate alone could flip that item; otherwise 0.
@@ -183,12 +199,12 @@ function photoTechnique(diag: ScanDiagnostics, base: Base): Measurement {
   if (!readable) fail('The expression could not be read from the face model, so it cannot be judged', 'face the lens with your whole face in view so the expression can be read')
 
   const boxes = diag.usable.map((u) => ({ box: faceBox(u.frame.named), w: u.frame.landmarks.width, h: u.frame.landmarks.height }))
-  const shares = boxes.flatMap((b) => (b.box ? [b.box.height / Math.min(b.w, b.h)] : []))
+  const shares = boxes.flatMap((b) => (b.box ? [b.box.height / (QC_LIMITS.centralShare * Math.min(b.w, b.h))] : []))
   const faceShare = shares.length > 0 ? median(shares) : Number.NaN
-  if (Number.isFinite(faceShare) && faceShare < MIN_FACE_SHARE_OF_SHORT_SIDE) {
+  if (Number.isFinite(faceShare) && faceShare < MIN_FACE_SHARE_OF_CENTRAL_WINDOW) {
     fail(
-      `The face is ${round(faceShare * 100, 1)}% of the shorter frame side (minimum ${MIN_FACE_SHARE_OF_SHORT_SIDE * 100}%), too small to judge the photo technique`,
-      `move the camera to about ${QC_LIMITS.targetDistanceM} m from your face so the head fills more of the frame`,
+      `The face is ${round(faceShare * 100, 1)}% of the central ${QC_LIMITS.centralShare * 100}% window of the frame (minimum ${MIN_FACE_SHARE_OF_CENTRAL_WINDOW * 100}%), too small to judge the photo technique`,
+      `bring the camera to about ${QC_LIMITS.targetDistanceM} m from your face, or use the rear 2x or 3x lens at that distance, so the head fills more of the frame`,
     )
   }
   const cropped = boxes.filter((b) => b.box && (b.box.x <= 0 || b.box.y <= 0 || b.box.x + b.box.width >= b.w || b.box.y + b.box.height >= b.h)).length
@@ -221,7 +237,7 @@ function photoTechnique(diag: ScanDiagnostics, base: Base): Measurement {
       sharpness: sharp.value,
       lightImbalance: light.value,
       expressionWorstRatio: worstExpressionRatio(diag, ['mouth', 'brow', 'eye']),
-      faceHeightShareOfShortSide: faceShare,
+      faceHeightShareOfCentralWindow: faceShare,
     }),
   }
 }

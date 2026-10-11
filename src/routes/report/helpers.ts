@@ -93,7 +93,7 @@ export const KIND_LABEL: Record<ScanKind, string> = {
   monthly: 'Monthly scan',
 }
 
-export const SHOT_LABEL: Partial<Record<ShotType, string>> = {
+export const SHOT_LABEL: Record<ShotType, string> = {
   frontal_neutral: 'Frontal neutral',
   frontal_smile: 'Frontal smile',
   three_quarter_left: 'Left three-quarter',
@@ -111,6 +111,12 @@ export const SHOT_LABEL: Partial<Record<ShotType, string>> = {
   body_side: 'Body side',
   body_back: 'Body back',
   outfit: 'Outfit',
+  tape_entry: 'Tape measure entry',
+  scale_entry: 'Scale entry',
+  self_report: 'Self-report',
+  audio_clip: 'Audio clip',
+  video_clip: 'Video clip',
+  habit_log: 'Habit log',
 }
 
 export function shotLabel(shot: string): string {
@@ -166,7 +172,9 @@ export interface MetricCard {
   name: string
   inCatalog: boolean
   category: CategoryId | null
-  /** Shot the metric is read from, e.g. "Frontal neutral". */
+  /** Shot the metric is read from. */
+  shot: ShotType | null
+  /** The same, as words: "Frontal neutral". */
   shotText: string | null
   kind: CardKind
   /** Weight 0, pseudoscience and myth metrics: shown, but visually secondary. */
@@ -305,6 +313,7 @@ function cardFor(metricId: string, measurement: Measurement | undefined, score: 
     name: metric?.name ?? metricId,
     inCatalog: metric !== undefined,
     category,
+    shot: metric ? (metric.captureRequirements[0] ?? 'frontal_neutral') : null,
     shotText: metric ? shotLabel(metric.captureRequirements[0] ?? 'frontal_neutral') : null,
     kind,
     secondary: flag !== null,
@@ -413,6 +422,8 @@ export interface RecaptureStep {
 export interface RecaptureGroup {
   key: string
   label: string
+  /** Capture checks that failed on the stored photo of this shot, each with the instruction that fixes it. */
+  failedChecks: PhotoCheckView[]
   steps: RecaptureStep[]
 }
 
@@ -430,24 +441,27 @@ const stepKey = (text: string): string => text.toLowerCase().replace(/[.;\s]+$/g
 
 /**
  * Refused metrics that carry weight, grouped by the shot they are read from. Identical instructions are listed once with the metrics
- * they unblock, so ten refusals that all say "hold the head level" read as one line.
+ * they unblock, so ten refusals that all say "hold the head level" read as one line. The failed capture checks of the stored photo
+ * of the same shot lead each group: they say what to change, where the metric refusals only say that something has to.
  */
-export function buildRecapture(cards: readonly MetricCard[]): RecaptureGroup[] {
+export function buildRecapture(cards: readonly MetricCard[], photos: readonly Pick<PhotoRecord, 'shot' | 'qc'>[] = []): RecaptureGroup[] {
   const groups = new Map<string, RecaptureGroup & { seen: Map<string, RecaptureStep> }>()
   for (const card of actionableRefusals(cards)) {
     const steps = card.recapture.length > 0 ? card.recapture : ['Repeat the capture under the capture protocol.']
+    const key = card.shot ?? 'other'
     const label = card.shotText ?? 'Photo'
-    let group = groups.get(label)
+    let group = groups.get(key)
     if (!group) {
-      group = { key: label, label, steps: [], seen: new Map() }
-      groups.set(label, group)
+      const failedChecks = (photos.find((p) => p.shot === card.shot)?.qc.checks ?? []).filter((c) => !c.ok).map(checkView)
+      group = { key, label, failedChecks, steps: [], seen: new Map() }
+      groups.set(key, group)
     }
     for (const text of steps) {
-      const key = stepKey(text)
-      let step = group.seen.get(key)
+      const stepId = stepKey(text)
+      let step = group.seen.get(stepId)
       if (!step) {
         step = { text, metricIds: [], metricNames: [] }
-        group.seen.set(key, step)
+        group.seen.set(stepId, step)
         group.steps.push(step)
       }
       if (!step.metricIds.includes(card.metricId)) {
@@ -456,7 +470,7 @@ export function buildRecapture(cards: readonly MetricCard[]): RecaptureGroup[] {
       }
     }
   }
-  return [...groups.values()].map(({ key, label, steps }) => ({ key, label, steps }))
+  return [...groups.values()].map(({ key, label, failedChecks, steps }) => ({ key, label, failedChecks, steps }))
 }
 
 // ───────────────────────────── overall block ─────────────────────────────
@@ -506,6 +520,13 @@ export function leftOutText(tally: Tally): string | null {
   return parts.length === 0 ? null : `Left out of the coverage: ${parts.join(', ')}.`
 }
 
+/** "Versions: weights weights-1.0.0, ruleset rules-1.0.0." Each label names what the id is, the id is printed as stored. */
+export function versionsText(versions: Record<string, string>): string {
+  return `Versions: ${Object.entries(versions)
+    .map(([label, id]) => `${label} ${id}`)
+    .join(', ')}.`
+}
+
 export function buildOverallView(overall: OverallScore, context: OverallContext = {}): OverallView {
   const attempted = context.attempted ?? null
   const available = overall.status !== 'NOT_AVAILABLE' && overall.appearance !== null
@@ -515,6 +536,7 @@ export function buildOverallView(overall: OverallScore, context: OverallContext 
 
   if (!available) {
     explanation.push(COPY.overallNotAvailableWhy)
+    if (context.tally && context.tally.scored === 0 && context.tally.refused > 0) explanation.push(COPY.overallNothingScored)
     if (attempted !== null && attempted < MIN_OVERALL_COVERAGE - EPS) {
       explanation.push(
         `${COPY.overallBuildScope} The metrics this build measures carry ${formatShare(attempted)} of the total weight at most, below the ${need} needed.`,
@@ -541,8 +563,8 @@ export function buildOverallView(overall: OverallScore, context: OverallContext 
     coveragePct: Math.floor(Math.max(0, Math.min(1, overall.coverage)) * 100 + EPS),
     coverageText: `${coverage} of the score is measurable from this scan, ${need} is needed.`,
     explanation,
-    caiText: overall.cai === null ? `CAI: ${COPY.caiUnavailable}.` : `CAI: ${Math.trunc(overall.cai)}% – ${COPY.caiProvisional}.`,
-    weightsText: `Weights ${overall.weightsVersion}, ruleset ${overall.rulesetVersion}.`,
+    caiText: overall.cai === null ? `CAI: ${COPY.caiUnavailable}.` : `CAI: ${Math.trunc(overall.cai)}% (${COPY.caiProvisional}).`,
+    weightsText: versionsText({ weights: overall.weightsVersion, ruleset: overall.rulesetVersion }),
   }
 }
 
@@ -645,15 +667,13 @@ export interface PhotoView {
   alt: string
 }
 
+function checkView(c: QcCheck): PhotoCheckView {
+  return { id: c.id, label: CHECK_LABEL[c.id] ?? c.id, ok: c.ok, limit: c.limit, hint: c.hint }
+}
+
 export function describePhoto(photo: Pick<PhotoRecord, 'id' | 'shot' | 'width' | 'height' | 'qc'>): PhotoView {
   const { qc } = photo
-  const checks: PhotoCheckView[] = qc.checks.map((c) => ({
-    id: c.id,
-    label: CHECK_LABEL[c.id] ?? c.id,
-    ok: c.ok,
-    limit: c.limit,
-    hint: c.hint,
-  }))
+  const checks: PhotoCheckView[] = qc.checks.map(checkView)
   const issues = checks.filter((c) => !c.ok)
   const kept = `${qc.framesKept} of ${qc.framesTried} ${plural(qc.framesTried, 'frame')} kept`
 
