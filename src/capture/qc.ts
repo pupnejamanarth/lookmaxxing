@@ -207,12 +207,12 @@ function angleCheck(id: 'yaw' | 'roll' | 'pitch', value: number | undefined, kin
   let hint = ''
   if (!ok) {
     if (id === 'yaw') {
-      if (target === 0) hint = `Turn your head a little to your ${v > 0 ? 'right' : 'left'}: it is turned ${off} too far. Look straight into the lens.`
+      if (target === 0) hint = `Turn your head to your ${v > 0 ? 'right' : 'left'}: it is turned ${off} too far. Look straight into the lens.`
       else hint = `Turn your head ${Math.abs(v) < target ? 'further' : 'back'} toward the side-on angle: it is ${off} off ${target}°.`
     } else if (id === 'roll') {
-      hint = `Level your head: tilt it a little to your ${v > 0 ? 'right' : 'left'} (${off} off). Your eyes should sit on a level line.`
+      hint = `Level your head: tilt it to your ${v > 0 ? 'right' : 'left'} (${off} off). Your eyes should sit on a level line.`
     } else {
-      hint = v > 0 ? `Raise your chin a little (${off} too far down). Ear canal level with the lower eyelid.` : `Tilt your chin down a little (${off} too far up). Ear canal level with the lower eyelid.`
+      hint = v > 0 ? `Raise your chin (${off} too far down). Ear canal level with the lower eyelid.` : `Tilt your chin down (${off} too far up). Ear canal level with the lower eyelid.`
     }
   }
   return make(id, ok, v, limit, hint, error / tolerance)

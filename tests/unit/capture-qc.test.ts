@@ -95,7 +95,7 @@ describe('head pose', () => {
     expect(check(run({ frame: makeFrame({ pose: { roll: -6 } }) }), 'roll').hint).toMatch(/to your left/)
     // Positive pitch = chin down.
     expect(check(run({ frame: makeFrame({ pose: { pitch: 7 } }) }), 'pitch').hint).toMatch(/Raise your chin/)
-    expect(check(run({ frame: makeFrame({ pose: { pitch: -7 } }) }), 'pitch').hint).toMatch(/Tilt your chin down a little/)
+    expect(check(run({ frame: makeFrame({ pose: { pitch: -7 } }) }), 'pitch').hint).toMatch(/Tilt your chin down \(/)
   })
 
   it('fails (never passes silently) when the angle is not a number', () => {

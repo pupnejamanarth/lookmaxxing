@@ -1,0 +1,13 @@
+.qs-stage { position: relative; width: 100%; aspect-ratio: 3 / 4; background: #000; border-radius: 16px; overflow: hidden; }
+.qs-video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.qs-guide { position: absolute; inset: 0; pointer-events: none; }
+.qs-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.qs-pill { font-size: 0.8125rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--dim); }
+.qs-pill[data-ok='true'] { border-color: var(--accent); color: var(--accent); }
+.qs-pill[data-ok='false'] { border-color: var(--danger); color: var(--danger); }
+.qs-hint { font-size: 1.25rem; font-weight: 600; min-height: 3.2rem; }
+.qs-bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.qs-bar > span { display: block; height: 100%; background: var(--accent); transition: width 120ms linear; }
+.qs-list { padding-left: 1.2rem; margin: 8px 0; }
+.qs-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+@media (prefers-reduced-motion: reduce) { .qs-bar > span { transition: none; } }

@@ -18,7 +18,7 @@ import type { FaceFrame } from '../vision/types'
 import { FRONTAL_DEFS, FRONTAL_METRIC_IDS, combineFrames } from './frontal'
 import type { FrontalMetricId } from './frontal'
 import {
-  MIN_USABLE_FRAMES,
+  minFramesFor,
   analyseScan,
   evaluateGates,
   frameGate,
@@ -121,10 +121,10 @@ function measureFrontal(id: FrontalMetricId, diag: ScanDiagnostics, base: Base, 
   }
 
   const combined = combineFrames(def, diag.usable.map((u) => u.geo))
-  if (!combined || combined.nFrames < MIN_USABLE_FRAMES) {
+  if (!combined || combined.nFrames < minFramesFor(diag.shotQc)) {
     const got = combined?.nFrames ?? 0
     return refused(base, diag, {
-      reasons: [`Only ${got} of ${diag.usable.length} usable frames gave a plausible reading (minimum ${MIN_USABLE_FRAMES}): ${def.implausible}`],
+      reasons: [`Only ${got} of ${diag.usable.length} usable frames gave a plausible reading (minimum ${minFramesFor(diag.shotQc)}): ${def.implausible}`],
       recapture: [CAPTURE_AGAIN],
     })
   }

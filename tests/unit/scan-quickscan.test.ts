@@ -22,7 +22,25 @@ import { goodPixels, makeFrame } from './capture-frames'
 // Synthetic faces only: drawn from proportions in capture-frames.ts, no photo of anyone.
 const W = 1080
 const H = 1920
-const JPEG = readFileSync(new URL('../fixtures/portrait.jpg', import.meta.url))
+/** The sample portrait still carries metadata; drop APP1/APP2/APP13/COM segments so it behaves like a re-encoded photo. */
+function stripJpegMetadata(src: Uint8Array): Uint8Array {
+  const out: number[] = [0xff, 0xd8]
+  let i = 2
+  while (i < src.length) {
+    if (src[i] !== 0xff) break
+    const marker = src[i + 1]!
+    if (marker === 0xda) {
+      for (let k = i; k < src.length; k++) out.push(src[k]!)
+      break
+    }
+    const len = (src[i + 2]! << 8) | src[i + 3]!
+    const drop = marker === 0xe1 || marker === 0xe2 || marker === 0xed || marker === 0xfe
+    if (!drop) for (let k = i; k < i + 2 + len; k++) out.push(src[k]!)
+    i += 2 + len
+  }
+  return new Uint8Array(out)
+}
+const JPEG = stripJpegMetadata(new Uint8Array(readFileSync(new URL('../fixtures/portrait.jpg', import.meta.url))))
 const jpegBlob = () => new Blob([new Uint8Array(JPEG)], { type: 'image/jpeg' })
 const T0 = new Date(2026, 9, 10, 9, 0, 0).getTime()
 

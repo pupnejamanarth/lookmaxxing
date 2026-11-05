@@ -143,7 +143,7 @@ are reported as "no detectable change". The app never celebrates noise.
   `.gitignore` block photos, video, audio, databases and backups from ever being committed; CI fails if one appears.
 * **Image import** re-draws every image through a canvas and re-encodes it, which drops EXIF / GPS / XMP by
   construction; a byte check verifies no metadata markers remain; the original is never stored. (Milestone M1.)
-* **ML runs on-device** (MediaPipe WASM models bundled in the app – no fetch from Google at runtime). (Milestone M1.)
+* **ML runs on-device** (MediaPipe WASM runtime and the face model are bundled in the app and hash-pinned – no fetch from Google at runtime). The MediaPipe library ships a usage-metrics sender that posts to a Google endpoint with no off switch; `scripts/vendor-mediapipe.mjs` removes it at vendoring time and the app loads only the patched file. (Shipped in M1.)
 * **Backups** are encrypted files (AES-GCM-256, PBKDF2-SHA256 600 000 iterations) the user saves manually; the app
   warns against iCloud Drive / Google Photos. This is also the only way to move data between devices.
 * **iPhone specifics:** Safari deletes website data after 7 days unused unless the app is installed to the Home Screen

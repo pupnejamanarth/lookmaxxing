@@ -30,6 +30,9 @@ import { median, product, round, softLimitFactor } from './stats'
 /** Fewest usable frames a burst may have (PLAN §5: "burst agreement"; the capture module keeps at least 3). */
 export const MIN_USABLE_FRAMES = QC_LIMITS.minKeptFrames
 
+/** A single still photo has no burst: it needs one good frame, and the per-metric gates (pose, distance, expression) decide the rest. */
+export const minFramesFor = (shotQc: { framesTried: number }): number => (shotQc.framesTried <= 1 ? 1 : MIN_USABLE_FRAMES)
+
 /** Camera distance for ordinary proportions (PLAN §4.2 hard fail) and for nose widths and FWHR (catalog F10, F14). */
 export const MIN_DISTANCE_PROPORTIONS_M = QC_LIMITS.minDistanceM
 export const MIN_DISTANCE_NOSE_M = 1.5
@@ -376,14 +379,15 @@ export function frameGate(diag: ScanDiagnostics): GateResult {
     reasons.push(`The capture is a ${diag.shot.replace(/_/g, ' ')} shot, and this metric is measured on the frontal neutral shot`)
     recapture.push('take the frontal neutral shot: face the lens with a relaxed, neutral face')
   }
-  if (diag.shotQc.framesKept < MIN_USABLE_FRAMES) {
-    reasons.push(`Only ${diag.shotQc.framesKept} of ${diag.shotQc.framesTried} frames passed the capture checks (minimum ${MIN_USABLE_FRAMES})`)
-    recapture.push(`hold still for the whole burst and fix the failed capture checks until at least ${MIN_USABLE_FRAMES} frames pass`)
+  const minFrames = minFramesFor(diag.shotQc)
+  if (minFrames > 1 && diag.shotQc.framesKept < minFrames) {
+    reasons.push(`Only ${diag.shotQc.framesKept} of ${diag.shotQc.framesTried} frames passed the capture checks (minimum ${minFrames})`)
+    recapture.push(`hold still for the whole burst and fix the failed capture checks until at least ${minFrames} frames pass`)
   }
-  if (diag.usable.length < MIN_USABLE_FRAMES) {
+  if (diag.usable.length < minFrames) {
     const causes = [...new Set(diag.rejected.map((r) => r.why))].slice(0, 2)
     reasons.push(
-      `Only ${diag.usable.length} of ${diag.framesTotal} frames had a complete, plausible face mesh (minimum ${MIN_USABLE_FRAMES})${causes.length > 0 ? `: ${causes.join('; ')}` : ''}`,
+      `Only ${diag.usable.length} of ${diag.framesTotal} frames had a complete, plausible face mesh (minimum ${minFrames})${causes.length > 0 ? `: ${causes.join('; ')}` : ''}`,
     )
     recapture.push('keep your whole face in view with both eyes open, in front-on light, and hold still for the whole burst')
   }

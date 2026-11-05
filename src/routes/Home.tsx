@@ -6,7 +6,6 @@ import { DEFAULT_PRIVACY_CHECKLIST_KEYS, type Profile } from '../types'
 import {
   Badge,
   Banner,
-  Button,
   Card,
   LinkButton,
   PageHeader,
@@ -153,14 +152,17 @@ function PrivacyCard() {
 
 function QuickScanCard() {
   return (
-    <Card title="Quick scan" icon="camera" headerEnd={<Badge tone="grey">Not available</Badge>}>
+    <Card title="Quick scan" icon="camera" headerEnd={<Badge tone="green">Front photo only</Badge>}>
       <p className="home-line">
-        Scanning arrives in the next build. Until then you can browse every metric, how it is scored and how good its evidence is.
+        One front-facing photo, measured on this device. It covers only the face-proportion metrics, so there is no overall score yet. The weekly full scan (body, posture, skin, hair) arrives later.
       </p>
       <div className="u-row">
-        <Button variant="primary" icon="camera" disabled>
+        <LinkButton to="/scan" variant="primary" icon="camera">
           Start quick scan
-        </Button>
+        </LinkButton>
+        <LinkButton to="/scans" variant="ghost">
+          Past scans
+        </LinkButton>
         <LinkButton to="/metrics" variant="ghost">
           Browse metrics
         </LinkButton>

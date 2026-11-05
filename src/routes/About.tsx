@@ -57,8 +57,8 @@ export default function About() {
     <div className="u-stack u-stack--lg about">
       <PageHeader title="How scoring works" subtitle="The rules the app follows. Every score is an estimate, not a medical opinion." />
 
-      <Banner tone="info" title="Scoring is not live yet">
-        This page describes the rules the scoring engine is built to follow. The metric catalog is already open to browse.
+      <Banner tone="info" title="What is live today">
+        The quick scan scores the front-photo face metrics only, so no overall score is shown yet. Body, posture, skin and hair arrive with the weekly scan.
       </Banner>
 
       <Section title="The overall score">
