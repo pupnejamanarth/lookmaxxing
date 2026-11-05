@@ -44,6 +44,8 @@ jobs:
       - name: Check the built site for third-party URLs and the privacy meta tags
         run: node scripts/check-dist-privacy.mjs
 
+      - name: Install ffmpeg (builds the fake camera feed for the browser tests)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 

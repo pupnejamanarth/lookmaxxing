@@ -9,7 +9,7 @@ test.beforeAll(() => {
   if (existsSync(Y4M)) return
   mkdirSync('tests/.generated', { recursive: true })
   // The sample portrait looped as a 640x480 camera feed (a still image of a stock portrait, not a real user's photo).
-  execFileSync('/usr/bin/ffmpeg', ['-y', '-loop', '1', '-i', 'tests/fixtures/portrait.jpg', '-t', '6', '-r', '15', '-vf', 'scale=-2:480,pad=640:480:(ow-iw)/2:0,format=yuv420p', Y4M], { stdio: 'ignore' })
+  execFileSync('ffmpeg', ['-y', '-loop', '1', '-i', 'tests/fixtures/portrait.jpg', '-t', '6', '-r', '15', '-vf', 'scale=-2:480,pad=640:480:(ow-iw)/2:0,format=yuv420p', Y4M], { stdio: 'ignore' })
 })
 
 test.use({
