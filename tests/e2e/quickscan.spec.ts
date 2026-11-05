@@ -3,7 +3,9 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
 
 const Y4M = 'tests/.generated/portrait.y4m'
-const executablePath = process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
+const sandboxChromium = process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
+// Only point at the sandbox's Chromium when it exists; CI uses Playwright's own download.
+const executablePath = existsSync(sandboxChromium) ? sandboxChromium : undefined
 
 test.beforeAll(() => {
   if (existsSync(Y4M)) return
@@ -14,7 +16,7 @@ test.beforeAll(() => {
 
 test.use({
   launchOptions: {
-    executablePath,
+    ...(executablePath ? { executablePath } : {}),
     args: ['--no-sandbox', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--use-file-for-fake-video-capture=${Y4M}`],
   },
 })
