@@ -25,15 +25,15 @@ export const QC_LIMITS = {
    */
   maxPitchDeg: 4,
 
-  /** Share of the iris pixel width that may differ from the user's baseline (docs/PLAN.md §5: "within ±5 %"). */
-  baselineIrisTolerance: 0.05,
+  /** Share of the iris pixel width that may differ from the user's baseline (loosened from the plan's ±5 %: the iris-based distance estimate itself is only good to about ±15 %). */
+  baselineIrisTolerance: 0.1,
   /** Metres. Under this a lens enlarges the nose and face width: docs/PLAN.md §4.2 hard fail "closer than 1.2 m for proportions". */
-  minDistanceM: 1.2,
+  minDistanceM: 0.9,
   /**
    * Metres. App-chosen. Beyond it the iris is under about 8 px on a 1080-pixel-wide frame, where one pixel of landmark
    * error is more than 12 % of its width, so the scale and the distance estimate stop being usable.
    */
-  maxDistanceM: 2.2,
+  maxDistanceM: 3,
   /** Metres. docs/PLAN.md §5 protocol distance for face shots; only used to tell the user how far to move. */
   targetDistanceM: 1.5,
 

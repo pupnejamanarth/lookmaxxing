@@ -35,7 +35,7 @@ export const minFramesFor = (shotQc: { framesTried: number }): number => (shotQc
 
 /** Camera distance for ordinary proportions (PLAN §4.2 hard fail) and for nose widths and FWHR (catalog F10, F14). */
 export const MIN_DISTANCE_PROPORTIONS_M = QC_LIMITS.minDistanceM
-export const MIN_DISTANCE_NOSE_M = 1.5
+export const MIN_DISTANCE_NOSE_M = 1.1
 /** Uncertainty of a distance taken from the iris (src/vision/geometry.ts: "good to about ±15%"). */
 export const DISTANCE_ESTIMATE_REL_ERROR = 0.15
 

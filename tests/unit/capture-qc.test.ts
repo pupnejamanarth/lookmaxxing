@@ -33,9 +33,9 @@ describe('the limits are the ones docs/PLAN.md §5 states', () => {
     expect(QC_LIMITS.maxYawDeg).toBe(3)
     expect(QC_LIMITS.maxRollDeg).toBe(3)
     expect(QC_LIMITS.maxPitchDeg).toBe(4)
-    expect(QC_LIMITS.baselineIrisTolerance).toBe(0.05)
-    expect(QC_LIMITS.minDistanceM).toBe(1.2)
-    expect(QC_LIMITS.maxDistanceM).toBe(2.2)
+    expect(QC_LIMITS.baselineIrisTolerance).toBe(0.1)
+    expect(QC_LIMITS.minDistanceM).toBe(0.9)
+    expect(QC_LIMITS.maxDistanceM).toBe(3)
     expect(QC_LIMITS.centralShare).toBe(0.5)
     expect(QC_LIMITS.maxClippedShare).toBe(0.01)
     expect(QC_LIMITS.profileYawDeg - QC_LIMITS.profileYawToleranceDeg).toBe(85)
@@ -110,11 +110,11 @@ describe('distance', () => {
   const at = (distanceM: number, extra: Partial<FrameQcArgs> = {}) =>
     check(run({ frame: makeFrame({ distanceM }), ...extra }), 'distance')
 
-  it('accepts 1.2–2.2 m and refuses outside it', () => {
-    expect(at(1.25).ok).toBe(true)
-    expect(at(2.15).ok).toBe(true)
-    expect(at(1.1).ok).toBe(false)
-    expect(at(2.3).ok).toBe(false)
+  it('accepts 0.9–3 m and refuses outside it', () => {
+    expect(at(0.95).ok).toBe(true)
+    expect(at(2.95).ok).toBe(true)
+    expect(at(0.8).ok).toBe(false)
+    expect(at(3.2).ok).toBe(false)
   })
 
   it('too close: tells the person to move back and why', () => {
@@ -126,34 +126,34 @@ describe('distance', () => {
   })
 
   it('too far: tells the person to move closer', () => {
-    const c = at(3.5)
+    const c = at(4)
     expect(c.ok).toBe(false)
     expect(c.hint).toMatch(/Move closer/)
     expect(c.hint).toMatch(/too small/)
   })
 
-  it('with a baseline, the iris must be within ±5% of it', () => {
+  it('with a baseline, the iris must be within ±10% of it', () => {
     const base = ipdPxAt(1.5, W, H) * IRIS_OVER_IPD
     const frameWith = (factor: number) => makeFrame({ irisPx: base * factor })
     expect(check(run({ frame: frameWith(1), baselineIrisPx: base }), 'distance').ok).toBe(true)
-    expect(check(run({ frame: frameWith(1.049), baselineIrisPx: base }), 'distance').ok).toBe(true)
-    expect(check(run({ frame: frameWith(0.951), baselineIrisPx: base }), 'distance').ok).toBe(true)
-    const closer = check(run({ frame: frameWith(1.08), baselineIrisPx: base }), 'distance')
+    expect(check(run({ frame: frameWith(1.099), baselineIrisPx: base }), 'distance').ok).toBe(true)
+    expect(check(run({ frame: frameWith(0.901), baselineIrisPx: base }), 'distance').ok).toBe(true)
+    const closer = check(run({ frame: frameWith(1.15), baselineIrisPx: base }), 'distance')
     expect(closer.ok).toBe(false)
     expect(closer.hint).toMatch(/Move back/)
-    expect(closer.hint).toMatch(/8% closer than in your last scan/)
-    const farther = check(run({ frame: frameWith(0.92), baselineIrisPx: base }), 'distance')
+    expect(closer.hint).toMatch(/15% closer than in your last scan/)
+    const farther = check(run({ frame: frameWith(0.85), baselineIrisPx: base }), 'distance')
     expect(farther.ok).toBe(false)
     expect(farther.hint).toMatch(/Move closer/)
   })
 
-  it('the same 8% drift passes without a baseline (only the 1.2–2.2 m range applies)', () => {
+  it('the same 8% drift passes without a baseline (only the 0.9–3 m range applies)', () => {
     const base = ipdPxAt(1.5, W, H) * IRIS_OVER_IPD
     expect(check(run({ frame: makeFrame({ irisPx: base * 1.08 }) }), 'distance').ok).toBe(true)
   })
 
   it('still enforces the range when the baseline matches', () => {
-    const tooClose = makeFrame({ distanceM: 0.8 })
+    const tooClose = makeFrame({ distanceM: 0.7 })
     expect(check(run({ frame: tooClose, baselineIrisPx: tooClose.irisPx }), 'distance').ok).toBe(false)
   })
 

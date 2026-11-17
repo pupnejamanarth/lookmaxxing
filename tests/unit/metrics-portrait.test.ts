@@ -218,7 +218,7 @@ describe('the real portrait, as it was shot', () => {
       expect(r[id]?.value, id).toBeNull()
       expect(r[id]?.refusal, id).toBeDefined()
     }
-    expect(text(r.F08)).toMatch(/Estimated camera distance 0\.5\d m \(minimum 1\.2 m;/)
+    expect(text(r.F08)).toMatch(/Estimated camera distance 0\.5\d m \(minimum 0\.9 m;/)
     expect(text(r.F08)).toMatch(/The face reaches \d+(\.\d)?% of the frame height outside the central 50% of the frame \(top edge\)/)
     expect(text(r.F08)).toMatch(/Expression is not neutral: smile signal 0\.9\d \(limit 0\.25\)/)
     expect(text(r.F08)).toMatch(/Expression is not neutral: brows pulled down signal 0\.8\d \(limit 0\.60\)/)
