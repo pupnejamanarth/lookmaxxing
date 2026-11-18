@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  CameraError, ImportError, analyzePixels, attachToVideo, beep, captureBurst, evaluateFrameQc, faceRegions, importPhoto, inspectStill, openCamera, unlockAudio,
+  CameraError, ImportError, attachToVideo, beep, captureBurst, evaluateFrameQc, importPhoto, inspectStill, openCamera, unlockAudio,
   type CameraHandle,
 } from '../capture'
+import { analyzeForQc } from '../capture/qcPixels'
 import type { FrameQc } from '../domain/types'
 import { navigate } from '../router'
 import {
@@ -13,14 +14,13 @@ import { scans } from '../store'
 import { Banner, Button, Card, PageHeader, Spinner } from '../ui'
 import { createFaceDetector } from '../vision'
 import type { FaceDetector } from '../vision/types'
-import { CAMERA_MESSAGE, CHECK_LABEL, IMPORT_MESSAGE, createStableTracker, firstFailing, nextAllowedText, scaleNamed } from './quickscan/helpers'
+import { CAMERA_MESSAGE, CHECK_LABEL, IMPORT_MESSAGE, createStableTracker, firstFailing, nextAllowedText } from './quickscan/helpers'
 import './quickscan/quickscan.css'
 
 type Phase = 'prep' | 'starting' | 'live' | 'working' | 'refused' | 'blocked' | 'error'
 
 const HOLD_MS = 1000
 const TICK_MS = 100
-const LIVE_MAX_WIDTH = 640
 
 export default function QuickScan() {
   const [phase, setPhase] = useState<Phase>('prep')
@@ -120,12 +120,7 @@ export default function QuickScan() {
         const h = video.videoHeight
         lastTs = Math.max(performance.now(), lastTs + 1)
         const frame = detector.detect(video, lastTs)
-        const k = Math.min(1, LIVE_MAX_WIDTH / w)
-        canvas.width = Math.round(w * k)
-        canvas.height = Math.round(h * k)
-        canvas.getContext('2d', { willReadFrequently: true })?.drawImage(video, 0, 0, canvas.width, canvas.height)
-        const regions = frame ? faceRegions(scaleNamed(frame.named, k), canvas.width, canvas.height) : null
-        const pixels = analyzePixels(canvas, regions ?? {})
+        const pixels = analyzeForQc(video, w, h, frame, canvas)
         const result = evaluateFrameQc({ frame, pixels, shot: QUICK_SHOT, imageWidth: w, imageHeight: h, baselineIrisPx: baselineRef.current })
         setQc(result)
         const failing = firstFailing(result)
@@ -279,7 +274,11 @@ export default function QuickScan() {
 
       {phase === 'refused' && draft && (
         <Card title="Nothing could be measured">
-          <p>Every metric was refused, so there is nothing to score. The reasons:</p>
+          <p>Every metric was refused, so there is nothing to score. The capture checks that failed:</p>
+          <ul className="qs-list">
+            {draft.bundle.photos[0]?.qc.checks.filter((c) => !c.ok).map((c) => <li key={c.id}><strong>{CHECK_LABEL[c.id]}:</strong> {c.hint}</li>)}
+          </ul>
+          <p>Other reasons:</p>
           <ul className="qs-list">
             {[...new Set(draft.bundle.measurements.flatMap((m) => m.refusal?.reasons ?? []))].slice(0, 6).map((r) => <li key={r}>{r}</li>)}
           </ul>

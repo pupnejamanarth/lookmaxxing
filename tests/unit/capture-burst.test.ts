@@ -310,7 +310,7 @@ describe('captureBurst', () => {
     const { detector } = fakeDetector([frame])
     const loose = await captureBurst({ video: fakeVideo(), detector, shot: 'frontal_neutral', frames: 3, intervalMs: 0 })
     expect(loose.shotQc.checks.find((c) => c.id === 'distance')?.ok).toBe(true)
-    const strict = await captureBurst({ video: fakeVideo(), detector, shot: 'frontal_neutral', frames: 3, intervalMs: 0, baselineIrisPx: frame.irisPx * 1.2 })
+    const strict = await captureBurst({ video: fakeVideo(), detector, shot: 'frontal_neutral', frames: 3, intervalMs: 0, baselineIrisPx: frame.irisPx * 2 })
     expect(strict.shotQc.checks.find((c) => c.id === 'distance')?.ok).toBe(false)
     expect(strict.shotQc.framesKept).toBe(0)
   })
@@ -424,7 +424,7 @@ describe('a single still (an imported photo)', () => {
       const canvas = new FakeCanvas()
       canvas.width = W
       canvas.height = H
-      const result = await inspectStill({ canvas: canvas as unknown as HTMLCanvasElement, detector, shot: 'frontal_neutral', baselineIrisPx: frame.irisPx * 1.3 })
+      const result = await inspectStill({ canvas: canvas as unknown as HTMLCanvasElement, detector, shot: 'frontal_neutral', baselineIrisPx: frame.irisPx * 2 })
       expect(result.shotQc.checks.find((c) => c.id === 'distance')?.ok).toBe(false)
       expect(result.shotQc.framesKept).toBe(0)
     })

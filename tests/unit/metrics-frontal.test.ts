@@ -813,25 +813,25 @@ describe('refusals carry the measured value and the limit, and say what to re-ca
     expect(m.qcFactor).toBeLessThan(0.9)
   })
 
-  it('camera distance under 0.9 m refuses the proportion metrics and under 1.1 m also the nose metrics', () => {
-    const close = run(BASE, { frame: () => ({ distanceM: 0.8 }), shotQc: { estimatedDistanceM: 0.8 } })
+  it('camera distance under 0.4 m refuses the proportion metrics and under 0.5 m also the nose metrics', () => {
+    const close = run(BASE, { frame: () => ({ distanceM: 0.3 }), shotQc: { estimatedDistanceM: 0.3 } })
     for (const id of [...POSE_SENSITIVE, 'F21']) {
-      expect(refusalText(close[id]), id).toContain('Estimated camera distance 0.80 m (minimum')
+      expect(refusalText(close[id]), id).toContain('Estimated camera distance 0.30 m (minimum')
     }
-    expect(refusalText(close.F08)).toContain('(minimum 0.9 m;')
+    expect(refusalText(close.F08)).toContain('(minimum 0.4 m;')
     expect(refusalText(close.F08)).toContain('good to about 15%')
-    expect(refusalText(close.F08)).toContain('move the camera back to about 1.5 m from your face (now about 0.8 m)')
-    // 1.0 m: ordinary proportions pass, nose width / FWHR / phi-fit (which reads the nose) do not.
-    const mid = run(BASE, { frame: () => ({ distanceM: 1.0 }), shotQc: { estimatedDistanceM: 1.0 } })
+    expect(refusalText(close.F08)).toContain('move the camera back to about 1.5 m from your face (now about 0.3 m)')
+    // 0.45 m: ordinary proportions pass, nose width / FWHR / phi-fit (which reads the nose) do not.
+    const mid = run(BASE, { frame: () => ({ distanceM: 0.45 }), shotQc: { estimatedDistanceM: 0.45 } })
     expect(refusedIds(mid).sort()).toEqual(['F10', 'F14', 'F21'])
-    expect(refusalText(mid.F14)).toContain('Estimated camera distance 1.00 m (minimum 1.1 m;')
-    expect(refusalText(mid.F10)).toContain('(minimum 1.1 m;')
+    expect(refusalText(mid.F14)).toContain('Estimated camera distance 0.45 m (minimum 0.5 m;')
+    expect(refusalText(mid.F10)).toContain('(minimum 0.5 m;')
     expect(value(mid.F07)).toBeCloseTo(BASE.fifths, 6)
   })
 
   it('without a distance in the capture record it is estimated from the iris of the frames', () => {
-    const r = run(BASE, { shotQc: { estimatedDistanceM: null }, frame: () => ({ distanceM: 0.8 }) })
-    expect(refusalText(r.F08)).toContain('Estimated camera distance 0.80 m')
+    const r = run(BASE, { shotQc: { estimatedDistanceM: null }, frame: () => ({ distanceM: 0.3 }) })
+    expect(refusalText(r.F08)).toContain('Estimated camera distance 0.30 m')
     const ok = run(BASE, { shotQc: { estimatedDistanceM: null }, frame: () => ({ distanceM: 1.7 }) })
     expect((ok.F08 as Measurement).refusal).toBeUndefined()
     expect(((ok.F08 as Measurement).inputs?.distanceM as number)).toBeCloseTo(1.7, 4)
@@ -933,10 +933,10 @@ describe('refusals carry the measured value and the limit, and say what to re-ca
   })
 
   it('several failures are all reported, each with its own instruction', () => {
-    const r = run(BASE, { frame: () => ({ pose: { yaw: 5, roll: 4, pitch: 6 }, rotateDeg: 4, distanceM: 0.8 }), shotQc: { estimatedDistanceM: 0.8 } })
+    const r = run(BASE, { frame: () => ({ pose: { yaw: 5, roll: 4, pitch: 6 }, rotateDeg: 4, distanceM: 0.3 }), shotQc: { estimatedDistanceM: 0.3 } })
     const m = r.F08 as Measurement
-    expect(m.refusal?.reasons.length).toBe(4)
-    expect(m.refusal?.recapture.length).toBe(4)
+    expect(m.refusal?.reasons.length).toBe(5)
+    expect(m.refusal?.recapture.length).toBe(5)
     expect(m.refusal?.reasons.join(' ')).toMatch(/yaw.*roll.*pitch.*distance/)
   })
 })
@@ -1064,7 +1064,7 @@ describe('what comes out is always valid', () => {
   const scenarios: [string, RunOptions][] = [
     ['good', {}],
     ['yaw', { frame: () => ({ pose: { yaw: 6 } }) }],
-    ['close', { frame: () => ({ distanceM: 0.8 }), shotQc: { estimatedDistanceM: 0.8 } }],
+    ['close', { frame: () => ({ distanceM: 0.3 }), shotQc: { estimatedDistanceM: 0.3 } }],
     ['smile', { frame: () => ({ blendshapes: { ...neutralBlendshapes(), mouthSmileLeft: 0.9, mouthSmileRight: 0.9 } }) }],
     ['two frames', { n: 2 }],
     ['no mesh', { frame: () => ({ noMesh: true }) }],
@@ -1259,8 +1259,8 @@ describe('V06 photo technique', () => {
     expect(small.value).toBeNull()
     expect(small.refusal?.reasons.join(' ')).toMatch(/The face is 1[0-4]\.\d% of the central 50% window of the frame \(minimum 15%\)/)
     expect(small.refusal?.recapture.join(' ')).toContain('rear 2x or 3x lens')
-    // The same face at the farthest distance capture QC accepts is large enough.
-    const farthest = run(BASE, { frame: () => ({ distanceM: QC_LIMITS.maxDistanceM }), shotQc: { estimatedDistanceM: QC_LIMITS.maxDistanceM } }).V06 as Measurement
+    // The same face a little nearer is large enough.
+    const farthest = run(BASE, { frame: () => ({ distanceM: 2.5 }), shotQc: { estimatedDistanceM: 2.5 } }).V06 as Measurement
     expect(farthest.refusal).toBeUndefined()
     // The head is cut by the top edge of the picture.
     const cropped = run(BASE, { frame: () => ({ centre: { x: W / 2, y: 40 } }) }).V06 as Measurement
@@ -1319,9 +1319,9 @@ describe('the metrics agree with the catalog', () => {
       expect(p.pose, `${id} pose`).toBe(has(conditions, 'head yaw or roll above 3°'))
       expect(has(conditions, 'head yaw or roll above 3°') === has(conditions, 'head pitch above 2° from level'), `${id} pitch`).toBe(true)
       expect(p.centred, `${id} centred`).toBe(has(conditions, 'face outside the central 50% of the frame'))
-      const wants15 = has(conditions, 'estimated camera distance under 1.1 m')
-      const wants12 = has(conditions, 'estimated camera distance under 0.9 m')
-      expect(p.minDistanceM, `${id} distance`).toBe(wants15 ? 1.1 : wants12 ? 0.9 : null)
+      const wants15 = has(conditions, 'estimated camera distance under 0.5 m')
+      const wants12 = has(conditions, 'estimated camera distance under 0.4 m')
+      expect(p.minDistanceM, `${id} distance`).toBe(wants15 ? 0.5 : wants12 ? 0.4 : null)
       const neutral = has(conditions, /^expression not neutral/)
       expect(p.expression.includes('mouth') && p.expression.includes('brow'), `${id} neutral`).toBe(neutral)
       expect(p.expression.includes('eye'), `${id} eyes`).toBe(has(conditions, 'eyes closed, squinting or looking away from the lens'))
@@ -1343,7 +1343,7 @@ describe('the metrics agree with the catalog', () => {
 
   it('F21 inherits the gates of the metrics it is computed from', () => {
     const p = gateProfileFor('F21')
-    expect(p.minDistanceM).toBe(1.1)
+    expect(p.minDistanceM).toBe(0.5)
     expect(p.extra).toContain('chinHidden')
     expect(p.pose).toBe(true)
   })

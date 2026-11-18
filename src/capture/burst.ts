@@ -14,8 +14,8 @@ import type { FaceDetector, FaceFrame, NamedPoints } from '../vision'
 import type { ShotType } from '../catalog/schema'
 import type { FrameQc, ShotQc } from '../domain/types'
 import { encodeJpeg } from './metadata'
-import { analyzePixels } from './pixels'
-import { distanceFromIris, evaluateFrameQc, faceRegions, steadyCheck, worstChecks } from './qc'
+import { analyzeForQc } from './qcPixels'
+import { distanceFromIris, evaluateFrameQc, steadyCheck, worstChecks } from './qc'
 
 export const DEFAULT_BURST_FRAMES = 5
 /** Pause between grabbed frames, ms: long enough for the camera to deliver a new frame (30 fps = 33 ms) and to let the UI repaint. */
@@ -229,10 +229,12 @@ interface CanvasAnalysis {
 }
 
 /** Detector + pixel statistics + quality checks on one canvas. */
+let scratch: HTMLCanvasElement | null = null
+const scratchCanvas = (): HTMLCanvasElement => (scratch ??= document.createElement('canvas'))
+
 function analyzeCanvas(canvas: HTMLCanvasElement, detector: FaceDetector, shot: ShotType, baselineIrisPx: number | null): CanvasAnalysis {
   const frame = detector.detect(canvas, nextTimestamp(detector))
-  const regions = frame ? faceRegions(frame.named, canvas.width, canvas.height) : null
-  const pixels = analyzePixels(canvas, regions ?? {})
+  const pixels = analyzeForQc(canvas, canvas.width, canvas.height, frame, scratchCanvas())
   const qc = evaluateFrameQc({ frame, pixels, shot, imageWidth: canvas.width, imageHeight: canvas.height, baselineIrisPx })
   return { frame, qc, sharpness: pixels.sharpness }
 }

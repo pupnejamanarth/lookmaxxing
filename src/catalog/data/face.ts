@@ -25,10 +25,10 @@ const FRONTAL_POSE = [
   'head yaw or roll above 3°',
   'head pitch above 2° from level',
   'face outside the central 50% of the frame',
-  'estimated camera distance under 0.9 m',
+  'estimated camera distance under 0.4 m',
 ]
 
-const NOSE_DISTANCE = ['estimated camera distance under 1.1 m']
+const NOSE_DISTANCE = ['estimated camera distance under 0.5 m']
 
 const NEUTRAL_FACE = [
   'expression not neutral (smiling, frowning, brows raised or squeezed)',
@@ -38,7 +38,7 @@ const NEUTRAL_FACE = [
 const PROFILE_POSE = [
   'head not in a true side view (more than 5° away from 90° yaw)',
   'head pitch above 3° from level',
-  'estimated camera distance under 1.1 m',
+  'estimated camera distance under 0.5 m',
   'hand-placed points not confirmed by the user',
 ]
 
@@ -512,7 +512,7 @@ export const metrics: Metric[] = [
       ...FRONTAL_POSE,
       ...NEUTRAL_FACE,
       'brow hidden by hair or glasses frames',
-      'estimated camera distance under 1.1 m',
+      'estimated camera distance under 0.5 m',
     ],
     phase: 'M1',
   },
