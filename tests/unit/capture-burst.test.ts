@@ -266,8 +266,10 @@ describe('captureBurst', () => {
     expect(result.shotQc.framesKept).toBe(3)
 
     // Each frame is the video drawn as it comes, with no transform: the JPEG is not mirrored.
-    expect(FakeCanvas.drawn).toHaveLength(3)
-    for (const args of FakeCanvas.drawn) expect(args.slice(1)).toEqual([0, 0, W, H])
+    // The picture is drawn once per frame at full size; each is also copied to the shared analysis canvas (the same size the live preview checks at).
+    const full = FakeCanvas.drawn.filter((args) => args[3] === W && args[4] === H)
+    expect(full).toHaveLength(3)
+    for (const args of full) expect(args.slice(1)).toEqual([0, 0, W, H])
     // Encoded once, as JPEG at quality 0.92, at the video's full size.
     expect(FakeCanvas.encoded).toEqual([['image/jpeg', 0.92, W, H]])
     // A video-mode detector needs timestamps that strictly increase.
@@ -280,7 +282,7 @@ describe('captureBurst', () => {
     const { detector } = fakeDetector([goodFrame()])
     const result = await captureBurst({ video: fakeVideo(), detector, shot: 'frontal_neutral', intervalMs: 0 })
     expect(result.shotQc.framesTried).toBe(5)
-    expect(FakeCanvas.drawn).toHaveLength(5)
+    expect(FakeCanvas.drawn.filter((args) => args[3] === W && args[4] === H)).toHaveLength(5)
   })
 
   it('counts frames without a face as tried but does not list them, and still returns the frames that have one', async () => {
